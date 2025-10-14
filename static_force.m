@@ -1,20 +1,21 @@
 clear
 
 % Parameters
-R1 = 800;
-R2 = 600;
+R1 = 900;  % 800
+R2 = 700;  % 600
 H = 20;
 r1 = 100;
 r2 = 80;
-h = 100;
+h = 100;  % 100
 Lmax = 1000;
 Lmin = 650;
 
 % Force
 g = 9.8;
-% F_ex = [0; 7*g; 0; 0; 0; 0];  % y
-F_ex = [7*g; 0; 0; 0; 0; 7*g*50];  % x
-% F_ex = [0; 0; 7*g; 0; 0; 0];  % z
+% F_ex = [0; 10*g; 0; 0; 0; 0];  % y
+% F_ex = [10*g; 0; 0; 0; 0; 0];  % x
+F_ex = [0; 0; -10*g; 0; 0; 0];  % z
+% F_ex = [0; -3.5*g; -sqrt(3)*3.5*g; 0; 0; 0];
 
 
 % Points
@@ -95,6 +96,11 @@ fig = figure('Color', [1 1 1]);
 plot3(B(1, :), B(2, :), B(3, :), 'o', 'Color', '#FF7F50');
 hold on
 plot3(P(1, :), P(2, :), P(3, :), 'o', 'Color', '#32CD32');
+B_plot = [B(:,1) B(:,5) B(:,2) B(:,3) B(:,4) B(:,1)];
+P_plot = [P(:,1) P(:,5) P(:,2) P(:,3) P(:,4) P(:,1)];
+plot3(B_plot(1, :), B_plot(2, :), B_plot(3, :), '-', 'Color', '#FF7F50');
+plot3(P_plot(1, :), P_plot(2, :), P_plot(3, :), '-', 'Color', '#32CD32');
+
 for i = 1 : 5
     plot3([B(1, i) P(1, i)], [B(2, i) P(2, i)], [B(3, i) P(3, i)], '-', 'Color', '#4682B4');
 end
@@ -107,7 +113,7 @@ K_force_draw = 10;
 
 p_st = pos_plant;
 p_ed = p_st + F_ex(1:3) * K_force_draw;
-arrow3(p_st', p_ed', 'r');
+arrow3(p_st', p_ed', 'b');
 
 for i = 1 : 5
     if abs(F_in(i)) > 0.01
@@ -128,7 +134,8 @@ xlabel("x");
 ylabel("y")
 zlabel("z")
 
-
+fprintf('>= 可能由于没考虑形变，因此计算不准 =<\n')
+fprintf('>>>= static_force done =<<<\n');
 
 
 

@@ -1,16 +1,17 @@
 clear
+fig_rotation_show = 0;  % 1开启展示旋转
 gif_generate_flag = 1;  % 1为开启录制功能，运行一次程序后记得改文件名
 
 
 %--------parameter3--------
 l_max = 1000;
-l_min = 650;
-R1 = 800;
-R2 = 600;
+l_min = 670;
+R1 = 800;  % 800
+R2 = 600;  % 600
 H = 20;  % 20
 r1 = 100;
-r2 = 80;
-h = 100;
+r2 = 80;  % 80
+h = 100;  % 100
 
 % static plant
 B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
@@ -61,7 +62,7 @@ end
 % ------search space-------
 seq_x = -600 : 10 : 600;
 seq_y = -600 : 10 : 600;
-seq_z = -800 : 10 : -200;
+seq_z = -1200 : 10 : -200;
 
 % assistant parameter
 wors_space = [];
@@ -72,36 +73,49 @@ work_space_down = [0;0;0];
 % length transform
 for ix = 1 : length(seq_x)
     for iy = 1 : length(seq_y)
+        % x,y方向进行遍历
+
         z_min_point = zeros(3,1);
         z_max_point = zeros(3,1);
+
+        % 搜索z向上的工作空间界限
         for iz = 1 : length(seq_z)
             vt = [seq_x(ix); seq_y(iy); seq_z(iz)];  % 搜索的目标点
             pos_flag = 0;  % 位置可达标志位
+            s_limb = zeros(3, 5);  % 支链的方向向量
             
             for j = 1 : length(P_v(1, :))
                 vAa = vt + P_v(:, j) - B(:, j);
                 len_vAa = norm(vAa);
+                s_limb(:, j) = vAa / len_vAa;
 
                 if (len_vAa >= l_min)&&(len_vAa <= l_max)
                     pos_flag = pos_flag + 1;
                 end
+            end
 
-                % 只画z方向的上下两端点
-                if pos_flag == length(P_v(1, :))  % 如果所有条件均允许
-                    if z_min_point == zeros(3,1)  % 如果第一次进入循环
-                        z_min_point = vt;
-                        z_max_point = vt;
-                    else
-                        z_max_point = vt;
-                    end
+            s_limb_move = zeros(3, 5);
+            for i_limb = 1 : 5
+                s_limb_move(:, i_limb) = R_plant' * s_limb(:, i_limb);
+            end
 
-                    % work_space = [wors_space vt];  % 全局搜索
 
-                end                
-            end  
+            % 只画z方向的上下两端点
+            
+            if pos_flag == length(P_v(1, :))  % 如果所有条件均允许
+                if z_min_point == zeros(3,1)  % 如果第一次进入循环
+                    z_min_point = vt;
+                    z_max_point = vt;
+                else
+                    z_max_point = vt;
+                end
 
+                % work_space = [wors_space vt];  % 全局搜索
+            end
       
         end
+
+        % 将工作空间界限添加到最后的作图中
         if (z_min_point(3) ~= 0) && (z_max_point(3) ~= 0)
             work_space_up = [work_space_up z_max_point];
             work_space_down = [work_space_down z_min_point];
@@ -115,12 +129,19 @@ fig = figure('Color', [1 1 1]);
 plot3(B(1, :), B(2, :), B(3, :), 'o', 'Color', '#FF7F50');
 hold on
 plot3(P(1, :), P(2, :), P(3, :), 'o', 'Color', '#32CD32');
+B_plot = [B(:,1) B(:,5) B(:,2) B(:,3) B(:,4) B(:,1)];
+P_plot = [P(:,1) P(:,5) P(:,2) P(:,3) P(:,4) P(:,1)];
+plot3(B_plot(1, :), B_plot(2, :), B_plot(3, :), '-', 'Color', '#FF7F50');
+plot3(P_plot(1, :), P_plot(2, :), P_plot(3, :), '-', 'Color', '#32CD32');
+
 for i = 1 : 5
     plot3([B(1, i) P(1, i)], [B(2, i) P(2, i)], [B(3, i) P(3, i)], '-', 'Color', '#4682B4');
 end
 % 工作空间散点
-plot3(work_space_up(1,2:end), work_space_up(2,2:end), work_space_up(3,2:end), '.', 'Color', '#00BFFF');
-plot3(work_space_down(1,2:end), work_space_down(2,2:end), work_space_down(3,2:end), '.', 'Color', '#4169E1');
+% plot3(work_space_up(1,2:end), work_space_up(2,2:end), work_space_up(3,2:end), '.', 'Color', '#00BFFF');
+% plot3(work_space_down(1,2:end), work_space_down(2,2:end), work_space_down(3,2:end), '.', 'Color', '#4169E1');
+scatter3(work_space_up(1,2:end), work_space_up(2,2:end), work_space_up(3,2:end), 2, work_space_up(3,2:end),'filled');
+scatter3(work_space_down(1,2:end), work_space_down(2,2:end), work_space_down(3,2:end), 2, work_space_down(3,2:end),'filled');
 
 grid on
 axis equal
@@ -133,19 +154,22 @@ zlabel('z')
 axis vis3d
 filename = 'view0.gif';
 fif_delay_time = 0.03;
-for ii = 1 : 360
-    view(-45 + 1*ii,30);
-    pause(fif_delay_time);
 
-    % generate gif
-    if gif_generate_flag == 1
-        frame = getframe(fig);
-        im = frame2im(frame);
-        [A, map] = rgb2ind(im, 256);
-        if ii == 1
-            imwrite(A,map,filename,'gif','LoopCount',Inf,'DelayTime',fif_delay_time);
-        else
-            imwrite(A,map,filename,'gif','WriteMode','append','DelayTime',fif_delay_time);
+if fig_rotation_show == 1
+    for ii = 1 : 360
+        view(-45 + 1*ii,30);
+        pause(fif_delay_time);
+
+        % generate gif
+        if gif_generate_flag == 1
+            frame = getframe(fig);
+            im = frame2im(frame);
+            [A, map] = rgb2ind(im, 256);
+            if ii == 1
+                imwrite(A,map,filename,'gif','LoopCount',Inf,'DelayTime',fif_delay_time);
+            else
+                imwrite(A,map,filename,'gif','WriteMode','append','DelayTime',fif_delay_time);
+            end
         end
     end
 end
