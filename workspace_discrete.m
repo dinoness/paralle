@@ -1,17 +1,33 @@
 clear
 fig_rotation_show = 0;  % 1开启展示旋转
-gif_generate_flag = 1;  % 1为开启录制功能，运行一次程序后记得改文件名
+gif_generate_flag = 0;  % 1为开启录制功能，运行一次程序后记得改文件名
 
-
+% 还没有考虑关节角度的限制
 %--------parameter3--------
-l_max = 1000;
-l_min = 670;
-R1 = 800;  % 800
-R2 = 600;  % 600
-H = 20;  % 20
-r1 = 100;
-r2 = 80;  % 80
-h = 100;  % 100
+T = readtable('parameters.xlsx', 'Range', 'A2:B12');
+paras = table2array(T(:, 2));
+l_max = paras(1);
+l_min = paras(2);  % 670
+R1 = paras(3);  % 800
+R2 = paras(4);  % 600
+H = paras(5);  % 20
+r1 = paras(6);  % 100
+r2 = paras(7);  % 80
+h = paras(8);  % 100
+
+pos_plant = [0; 0; -800];  % 后面作图用，不参与空间搜索
+alpha_plant = paras(9) / 180 * pi;  % 绕 x
+beta_plant = paras(10) / 180 * pi;  % 绕 y
+gamma_plant = paras(11) / 180 * pi;  % 绕 z
+
+% l_max = 1030;
+% l_min = 720;  % 670
+% R1 = 700;  % 800
+% R2 = 600;  % 600
+% H = -60;  % 20
+% r1 = 120;  % 100
+% r2 = 100;  % 80
+% h = 20;  % 100
 
 % static plant
 B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
@@ -23,10 +39,10 @@ B = [B1 B2 B3 B4 B5];
 
 
 % Position and Posture of Move Plant
-pos_plant = [0; 0; -600];  % 后面作图用，不参与空间搜索
-alpha_plant = 0 / 180 * pi;  % 绕 x
-beta_plant = 0 / 180 * pi;  % 绕 y
-gamma_plant = 0 / 180 * pi;  % 绕 z
+% pos_plant = [0; 0; -600];  % 后面作图用，不参与空间搜索
+% alpha_plant = 0 / 180 * pi;  % 绕 x
+% beta_plant = 0 / 180 * pi;  % 绕 y
+% gamma_plant = 0 / 180 * pi;  % 绕 z
 
 Rx = [1                0                 0;
       0 cos(alpha_plant) -sin(alpha_plant);
@@ -175,7 +191,7 @@ if fig_rotation_show == 1
 end
 
 
-fprintf('>>>= workspace_discrete done =<<<\n');
+fprintf('>>>= workspace_discrete done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 
 
 
