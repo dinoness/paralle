@@ -71,20 +71,44 @@ for i = 1 : 5
     P_v(:, i) = R_plant * P_m(:, i);
     P(:, i) = P_v(:, i) + pos_plant;
 end
+
+
+% ball screw dir vector
+ball_screw_dir_angle_deg = [145 145 145  145 145;   % 与Z轴夹角
+                            -90  30 150 -150 -30];  % 与x轴夹角
+ball_screw_dir_angle = ball_screw_dir_angle_deg / 180 * pi;
+ball_vector = zeros(3, 5);
+ball_vector_world = zeros(3, 5);
+
+static_joint_dir_angle_deg = [ 0  0  0  0  0;
+                              -90  30 150 -150 -30];
+static_joint_dir_angle = static_joint_dir_angle_deg / 180 * pi;
+static_joint_vector = zeros(3, 5);
+
+for i_ball = 1 : 5
+    ball_vector(1, i_ball) = sin(ball_screw_dir_angle(1, i_ball)) * cos(ball_screw_dir_angle(2, i_ball));
+    ball_vector(2, i_ball) = sin(ball_screw_dir_angle(1, i_ball)) * sin(ball_screw_dir_angle(2, i_ball));
+    ball_vector(3, i_ball) = cos(ball_screw_dir_angle(1, i_ball));
+    ball_vector_world = R_plant * ball_vector;
+
+    static_joint_vector(1, i_ball) = sin(static_joint_dir_angle(1, i_ball)) * cos(static_joint_dir_angle(2, i_ball));
+    static_joint_vector(2, i_ball) = sin(static_joint_dir_angle(1, i_ball)) * sin(static_joint_dir_angle(2, i_ball));
+    static_joint_vector(3, i_ball) = cos(static_joint_dir_angle(1, i_ball));
+end
 % -----end-parameter3------
 
 
 
 % ------search space-------
-seq_x = -600 : 10 : 600;
-seq_y = -600 : 10 : 600;
-seq_z = -1200 : 10 : -200;
+seq_x = -400 : 10 : 400;
+seq_y = -400 : 10 : 400;
+seq_z = -1000 : 10 : -500;
 
 % assistant parameter
 wors_space = [];
 work_space_up = [0;0;0];
 work_space_down = [0;0;0];
-
+pos_count = 0;  % 空间点计数
 
 % length transform
 for ix = 1 : length(seq_x)
@@ -99,18 +123,24 @@ for ix = 1 : length(seq_x)
             vt = [seq_x(ix); seq_y(iy); seq_z(iz)];  % 搜索的目标点
             pos_flag = 0;  % 位置可达标志位
             s_limb = zeros(3, 5);  % 支链的方向向量
+            l_limb = zeros(1, 5);  % 支链长度
             
             for j = 1 : length(P_v(1, :))
                 vAa = vt + P_v(:, j) - B(:, j);
                 len_vAa = norm(vAa);
+                l_limb(j) = len_vAa;
                 s_limb(:, j) = vAa / len_vAa;
 
-                if (len_vAa >= l_min)&&(len_vAa <= l_max)
-                    pos_flag = pos_flag + 1;
+                if (len_vAa >= l_min)&&(len_vAa <= l_max)  % ===========支链长度条件===========
+                    angle_limb_scew = acos(dot(s_limb(:, j), ball_vector_world(:, j)));  % 支链与球铰轴线夹角
+                    angle_limb_scew_deg = angle_limb_scew / pi * 180;
+                    if(angle_limb_scew_deg <= 30 )  % ===========关节角度条件===========
+                        pos_flag = pos_flag + 1;
+                    end
                 end
             end
 
-            s_limb_move = zeros(3, 5);
+            s_limb_move = zeros(3, 5);  % 动平台坐标系下支链方向向量
             for i_limb = 1 : 5
                 s_limb_move(:, i_limb) = R_plant' * s_limb(:, i_limb);
             end
@@ -126,7 +156,28 @@ for ix = 1 : length(seq_x)
                     z_max_point = vt;
                 end
 
+                pos_count = pos_count + 1;
                 % work_space = [wors_space vt];  % 全局搜索
+            end
+
+            % 雅克比矩阵条件数计算
+            x_m = [1; 0; 0];
+            J1 = [s_limb (R_plant * x_m)];
+            J2 = [cross(P_v, s_limb, 1)  ...
+            (cross(P_v(:, 1 ), (R_plant * x_m)) + l_limb(1)*cross((R_plant * x_m), s_limb(:, 1)))];
+            J = [J1' J2'];
+            % structure of J
+            % J1'  J2'
+            % s1   \arr {ObP1} \times s1
+            % s2   \arr {ObP2} \times s2
+            % s3   \arr {ObP3} \times s3
+            % s4   \arr {ObP4} \times s4
+            % s5   \arr {ObP5} \times s5
+            % xb   L1(xb \times s1) + \arr {ObP1} \times xb
+            cond_J = cond(J);
+            det_J = det(J);
+            if abs(det_J) < 0.01
+                fprintf("x=%d,y=%d,z=%d,det_J=%.4f\n",seq_x(ix),seq_y(iy),seq_z(iz),det_J);
             end
       
         end
