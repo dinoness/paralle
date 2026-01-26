@@ -15,7 +15,7 @@ r1 = paras(6);  % 100
 r2 = paras(7);  % 80
 h = paras(8);  % 100
 
-pos_plant = [0; 0; -700];  % 后面作图用，不参与空间搜索
+pos_plant = [0; 0; -555];  % 后面作图用，不参与空间搜索
 alpha_plant = paras(9) / 180 * pi;  % 绕 x
 beta_plant = paras(10) / 180 * pi;  % 绕 y
 gamma_plant = paras(11) / 180 * pi;  % 绕 z
@@ -111,7 +111,7 @@ J = [J1' J2'];
 % s3   \arr {ObP3} \times s3
 % s4   \arr {ObP4} \times s4
 % s5   \arr {ObP5} \times s5
-% xb   L1(xb \times s1) + \arr {ObP1} \times xb
+% xb   L1 * (xb \times s1) + \arr {ObP1} \times xb
 % 上述各元素均为行向量排列
 
 % ---------force solve---------
