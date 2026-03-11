@@ -36,7 +36,7 @@ P = zeros(3, 5);    % 末端点坐标
 
 % ----- input data ------
 Pos_m_seq = [0.01;-0.01;-600.02;0.001;-0.001];  % line=5 colum=n
-Pos_ref_seq = [0;30;-600;0;0];  % line=5 colum=n  角度的单位是° **一列为一组**
+Pos_ref_seq = [0;30;-600;0;10];  % line=5 colum=n  角度的单位是° **一列为一组**
 seq_len = length(Pos_ref_seq(1, :));
 Pos_err_seq = zeros(5, seq_len);  % 位姿估计误差，优化的目标
 Pos_delta_seq = zeros(5, seq_len);  % 位姿扰动序列
@@ -78,15 +78,144 @@ for i_limb = 1 : length(P_v(1, :))
     joint_para(3, i_limb) = len_vAa;
 end
 
+
+% ======== 通用变量 ========
+o13 = zeros(1, 3);
+T_ref = [R_plant p_pos; o13 1];  % 目标位姿矩阵
+l0 = 600;  % 默认初始支链长度
+% U关节轴线方向
+joint_u_angle_tilt = 155 / 180 * pi;
+% 局部指数基公式
+zeta_r = [0;0;1;0;0;0];  % 旋转基底，在z轴为运动方向的前提下
+zeta_p = [0;0;0;0;0;1];  % 平移基底
+
 % ================================== 求解SPR支链 ==================================
+% ======================== 零位建模 ========================
+% 固定坐标到关节1的转移矩阵
+j1_1z = [1;0;0];
+j1_1x = [0;1;0];
+j1_1y = [0;0;1];
+R1_1 = [j1_1x j1_1y j1_1z];
+t1_1 = B1;
+T1_1 = [R1_1 t1_1;o13 1];
+
+% 关节1到关节2的转移矩阵
+j1_2z = [-1;0;0];
+j1_2x = [0;0;1];
+j1_2y = [0;1;0];
+R1_2 = [j1_2x j1_2y j1_2z];
+t1_2 = zeros(3,1);
+T1_2 = [R1_2 t1_2;o13 1];
+
+% 关节2到关节3的转移矩阵
+j1_3z = [0;-1;0];
+j1_3x = [1;0;0];
+j1_3y = [0;0;1];
+R1_3 = [j1_3x j1_3y j1_3z];
+t1_3 = zeros(3,1);
+T1_3 = [R1_3 t1_3;o13 1];
+
+% 关节3到关节4的转移矩阵
+R1_4 = eye(3);
+t1_4 = zeros(3,1);
+T1_4 = [R1_4 t1_4;o13 1];
+
+% 关节4到关节5的转移矩阵
+j1_5z = [-1;0;0];
+j1_5x = [0;0;1];
+j1_5y = [0;1;0];
+R1_5 = [j1_5x j1_5y j1_5z];
+t1_5 = [0;0;l0];
+T1_5 = [R1_5 t1_5;o13 1];
+
+% 关节5到平台的转移矩阵
+j1_pz = [-1;0;0];
+j1_px = [0;0;-1];
+j1_py = [0;-1;0];
+R1_p = [j1_px j1_py j1_pz];
+t1_p = [0;r1;0];
+T1_p = [R1_p t1_p;o13 1];
+
+T1e0 = T1_1*T1_2*T1_3*T1_4*T1_5*T1_p;
+
+% ======================== 求解部分 ========================
+% ============ 移动副 ============
+q14 = joint_para(3, 1) - l0;
+T1_zeta4 = exp_se3(zeta_p*q14);
+T1_xi4 = (T1_1*T1_2*T1_3*T1_4) * T1_zeta4 / (T1_1*T1_2*T1_3*T1_4);
+
+% ============ 球副 ============
+temp = T1_1*T1_2*T1_3*T1_4*T1_5;
+r1r0 = temp(1:3, 4);
+r1s = B(:, 1);
+p1s = [eye(3) zeros(3,1)] * T1_xi4 * [r1r0;1];
+q1s = [eye(3) zeros(3,1)] * (T_ref / T1e0) * [r1r0;1];
+
+axis11 = R1_1*[0;0;1];
+axis12 = R1_1*R1_2*[0;0;1];
+
+u1s = p1s - r1s;
+v1s = q1s - r1s;
+
+% alpha = ((axis11'*axis12)*axis12'*u1s - axis11'*v1s)/((axis11'*axis12)^2-1);
+% beta = ((axis11'*axis12)*axis12'*v1s - axis12'*u1s)/((axis11'*axis12)^2-1);
+% gamma2 = (u1s'*u1s-alpha^2-beta^2-2*alpha*beta*axis11'*axis12)/((cross(axis11,axis12))'*(cross(axis11,axis12)));
+% gamma = sqrt(gamma2);
+
+% z1s = alpha*axis11 + beta*axis12 + gamma*cross(axis11, axis12);
+
+% v1s_ = v1s - axis11*axis11'*v1s;
+% u1s_ = u1s - axis12*axis12'*u1s;
+% z11s_ = z1s - axis11*axis11'*z1s;
+% z21s_ = z1s - axis12*axis12'*z1s;
+% q11 = atan(-(axis11'*cross(v1s_, z11s_))/(v1s_'*z11s_));
+% q12 = atan((axis12'*cross(u1s_, z21s_))/(u1s_'*z21s_));
+
+[q11,q12] = Paden_Kahan2(u1s,v1s,axis11,axis12,1);
+
+T1_zeta1 = exp_se3(zeta_r*q11);
+T1_zeta2 = exp_se3(zeta_r*q12);
+T1_xi1 = T1_1 * T1_zeta1 / T1_1;
+T1_xi2 = (T1_1*T1_2) * T1_zeta2 / (T1_1*T1_2);
+
+dtemp = T1_1*T1_2*T1_3*T1_4*T1_5*[eye(3) [0;0;10];o13 1];
+r1w = dtemp(1:3,4);
+axis13 = R1_1*R1_2*R1_3*[0;0;1];
+
+p1w = [eye(3) zeros(3,1)] * T1_xi4 * ([r1w;1]);
+q1w = [eye(3) zeros(3,1)] * ((T1_xi1*T1_xi2) \ T_ref / T1e0) * ([r1w;1]);
+u1w = p1w - r1s;
+v1w = q1w - r1s;
+q13 = Paden_Kahan1(u1w, v1w, axis13);
+T1_zeta3 = exp_se3(zeta_r*q13);
+T1_xi3 = (T1_1*T1_2*T1_3) * T1_zeta3 / (T1_1*T1_2*T1_3);
+
+
+% %验证用
+% cal_r = T1_1*T1_zeta1*T1_2*T1_zeta2*T1_3*T1_zeta3*T1_4*T1_zeta4*T1_5
+% real_r = P(:, 1)
+
+
+% ============ 回转副 ============
+axis15 = R1_1*R1_2*R1_3*R1_4*R1_5*[0;0;1];
+temp = T1_1*T1_2*T1_3*T1_4*T1_5*T1_p;
+r1p = temp(1:3, 4);
+p1p = r1p;
+q1p = [eye(3) zeros(3,1)] * ((T1_xi1*T1_xi2*T1_xi3*T1_xi4) \ T_ref / T1e0) * [r1p;1];
+u1p = p1p - r1r0;
+v1p = q1p - r1r0;
+q15 = Paden_Kahan1(u1p,v1p,axis15);
+T1_zeta5 = exp_se3(zeta_r*q15);
+T1_xi5 = (T1_1*T1_2*T1_3*T1_4*T1_5) * T1_zeta5 / (T1_1*T1_2*T1_3*T1_4*T1_5);
+
+% 验证用
+% cal_r = T1_1*T1_zeta1*T1_2*T1_zeta2*T1_3*T1_zeta3*T1_4*T1_zeta4*T1_5*T1_zeta5*T1_p
+% p_pos
 
 
 
 % ================================== 求解UPS支链 ==================================
 % ======================== 零位建模 ========================
-% U关节轴线方向
-o13 = zeros(1, 3);
-joint_u_angle_tilt = 155 / 180 * pi;
 % 固定坐标到关节1的转移矩阵
 joint_1_z = [sin(joint_u_angle_tilt) * cos(limb_dir(2));
             sin(joint_u_angle_tilt) * sin(limb_dir(2));
@@ -118,7 +247,6 @@ t23 = [0;0;0];
 T23 = [R23 t23;o13 1];
 
 % 关节3到关节4的转移矩阵(平移z)
-l0 = 600;
 R34 = eye(3);
 t34 = [0;0;l0];
 T34 = [R34 t34;o13 1];
@@ -151,11 +279,8 @@ T_p = [R_p t_p;o13 1];
 % T01*T12*T23*T34*T45*T56*T_p
 % T01*T12
 T_e0 = T01*T12*T23*T34*T45*T56*T_p;  % 参考零位下的转移矩阵
-T_ref = [R_plant p_pos; o13 1];
 
-% 局部指数基公式
-zeta_r = [0;0;1;0;0;0];  % 旋转基底，在z轴为运动方向的前提下
-zeta_p = [0;0;0;0;0;1];  % 平移基底
+
 
 % ======================== 求解部分 ========================
 % ============ 移动副 ============
@@ -240,26 +365,20 @@ r_w_ = p_pos + R_plant*[0;0;-10];
 axis6 = R01*R12*R23*R34*R45*R56*[0;0;1];
 u_w = r_w_ - r_s;
 v_w = [eye(3) zeros(3,1)] * ((T_xi1*T_xi2*T_xi3*T_xi4*T_xi5) \ T_ref / T_e0) * ([r_w_;1] - [r_s;1]);
-v_w_ = v_w - axis6 * axis6' * v_w;
-u_w_ = u_w - axis6 * axis6' * u_w;
-q6 = atan((axis6'*cross(u_w_,v_w_))/(u_w_'*v_w_));
-
+q6 = Paden_Kahan1(u_w,v_w,axis6);
 
 T_zeta6 = exp_se3(zeta_r*q6);
 T_xi6 = (T01*T12*T23*T34*T45*T56) * T_zeta6 / (T01*T12*T23*T34*T45*T56);
 
-T_total1 = T01*T_zeta1*T12*T_zeta2*T23*T_zeta3*T34  % 验证虎克铰解算
-r_s
-T_total2 = T01*T_zeta1*T12*T_zeta2*T23*T_zeta3*T34*T_zeta4*T45*T_zeta5*T56*T_zeta6*T_p  % 验证球铰解算
-T_ref
+% T_total1 = T01*T_zeta1*T12*T_zeta2*T23*T_zeta3*T34;  % 验证虎克铰解算
+% r_s;
+% T_total2 = T01*T_zeta1*T12*T_zeta2*T23*T_zeta3*T34*T_zeta4*T45*T_zeta5*T56*T_zeta6*T_p  % 验证球铰解算
+% T_ref
 
 % 正确数据，q2 = -0.6435 or -36.87°
 % T_total第三列为[0.5196;0.3;-0.8]
 % q4 = 1.3642e-15
 % q5 = -0.6435
-
-
-% 先把球铰链最后一个关节变换写好，然后准备组会PPT，确定不开后，再接着写SPR关节解算
 
 
 % T01*T_zeta1*T12*T_zeta2*T23*T_zeta3*T34*T45*T56*T_p
