@@ -145,6 +145,7 @@ T1_zeta4 = exp_se3(zeta_p*q14);
 T1_xi4 = (T1_1*T1_2*T1_3*T1_4) * T1_zeta4 / (T1_1*T1_2*T1_3*T1_4);
 
 % ============ 球副 ============
+% 前两轴
 temp = T1_1*T1_2*T1_3*T1_4*T1_5;
 r1r0 = temp(1:3, 4);
 r1s = B(:, 1);
@@ -156,21 +157,6 @@ axis12 = R1_1*R1_2*[0;0;1];
 
 u1s = p1s - r1s;
 v1s = q1s - r1s;
-
-% alpha = ((axis11'*axis12)*axis12'*u1s - axis11'*v1s)/((axis11'*axis12)^2-1);
-% beta = ((axis11'*axis12)*axis12'*v1s - axis12'*u1s)/((axis11'*axis12)^2-1);
-% gamma2 = (u1s'*u1s-alpha^2-beta^2-2*alpha*beta*axis11'*axis12)/((cross(axis11,axis12))'*(cross(axis11,axis12)));
-% gamma = sqrt(gamma2);
-
-% z1s = alpha*axis11 + beta*axis12 + gamma*cross(axis11, axis12);
-
-% v1s_ = v1s - axis11*axis11'*v1s;
-% u1s_ = u1s - axis12*axis12'*u1s;
-% z11s_ = z1s - axis11*axis11'*z1s;
-% z21s_ = z1s - axis12*axis12'*z1s;
-% q11 = atan(-(axis11'*cross(v1s_, z11s_))/(v1s_'*z11s_));
-% q12 = atan((axis12'*cross(u1s_, z21s_))/(u1s_'*z21s_));
-
 [q11,q12] = Paden_Kahan2(u1s,v1s,axis11,axis12,1);
 
 T1_zeta1 = exp_se3(zeta_r*q11);
@@ -178,6 +164,7 @@ T1_zeta2 = exp_se3(zeta_r*q12);
 T1_xi1 = T1_1 * T1_zeta1 / T1_1;
 T1_xi2 = (T1_1*T1_2) * T1_zeta2 / (T1_1*T1_2);
 
+% 第三轴
 dtemp = T1_1*T1_2*T1_3*T1_4*T1_5*[eye(3) [0;0;10];o13 1];
 r1w = dtemp(1:3,4);
 axis13 = R1_1*R1_2*R1_3*[0;0;1];
@@ -305,19 +292,7 @@ v_u = q_u - r_u;
 axis1 = R01*[0;0;1];
 axis2 = R01*R12*[0;0;1];
 
-alpha = ((axis1'*axis2)*axis2'*u_u - axis1'*v_u)/((axis1'*axis2)^2-1);
-beta = ((axis1'*axis2)*axis2'*v_u - axis2'*u_u)/((axis1'*axis2)^2-1);
-gamma2 = (u_u'*u_u-alpha^2-beta^2-2*alpha*beta*axis1'*axis2)/((cross(axis1,axis2))'*(cross(axis1,axis2)));
-gamma = sqrt(gamma2);
-
-z_u = alpha*axis1 + beta*axis2 + gamma*cross(axis1, axis2);
-
-v_u_ = v_u - axis1*axis1'*v_u;
-u_u_ = u_u - axis2*axis2'*u_u;
-z1_u_ = z_u - axis1*axis1'*z_u;
-z2_u_ = z_u - axis2*axis2'*z_u;
-q1 = atan(-(axis1'*cross(v_u_, z1_u_))/(v_u_'*z1_u_));
-q2 = atan((axis2'*cross(u_u_, z2_u_))/(u_u_'*z2_u_));
+[q1,q2] = Paden_Kahan2(u_u, v_u, axis1, axis2, 1);
 
 T_zeta1 = exp_se3(zeta_r*q1);
 T_zeta2 = exp_se3(zeta_r*q2);
@@ -336,19 +311,7 @@ v_s = q_s - r_s0;
 axis4 = R01*R12*R23*R34*[0;0;1];
 axis5 = R01*R12*R23*R34*R45*[0;0;1];
 
-alpha = ((axis4'*axis5)*axis5'*u_s - axis4'*v_s)/((axis4'*axis5)^2-1);
-beta = ((axis4'*axis5)*axis5'*v_s - axis5'*u_s)/((axis4'*axis5)^2-1);
-gamma2 = (u_s'*u_s-alpha^2-beta^2-2*alpha*beta*axis4'*axis5)/(cross(axis4, axis5)'*cross(axis4, axis5));
-gamma = -sqrt(gamma2);  % 正负号判断
-
-z_s = alpha*axis4 + beta*axis5 + gamma*cross(axis4, axis5);
-
-v_s_ = v_s - axis4*axis4'*v_s;
-u_s_ = u_s - axis5*axis5'*u_s;
-z1_s_ = z_s - axis4*axis4'*z_s;
-z2_s_ = z_s - axis5*axis5'*z_s;
-q4 = atan(-(axis4'*cross(v_s_, z1_s_))/(v_s_'*z1_s_));
-q5 = atan((axis5'*cross(u_s_, z2_s_))/(u_s_'*z2_s_));
+[q4,q5] = Paden_Kahan2(u_s, v_s, axis4, axis5, -1);
 
 T_zeta4 = exp_se3(zeta_r*q4);
 T_zeta5 = exp_se3(zeta_r*q5);
