@@ -24,7 +24,27 @@ J = sin(theta) / theta * eye(3) ...
     + (1 - cos(theta)) / theta * phi_up;
 T = [R J*rou; o13 1];
 
+% fprintf("theta = %f\n", theta)
+% fprintf("phi = \n")
+% disp(phi)
+% fprintf("J = \n")
+% disp(J)
+
 end
+
+
+% ===========test data============
+% phi = pi/4/sqrt(6)*[1;-2;-1];
+% rou = [0;0;0.5];
+% xi = [phi;rou];
+
+% ===========paper data============
+% p1 = [0;0;2.0944;0.2056;0.3560;0];
+% p2 = [-1.5708;0;0;0;0;0];
+% p3 = [0;0;0;0;0.5;0];
+% p4 = [1.5708;0;0;-0.15;0;0];
+% p5 = [0;1.5708;0;0;0;0];
+% p6 = [1.5835;-0.9142;-1.5835;-0.0325;-0.1343;-0.1];
 
 % function T = exp_se3(xi)
 % % se3_exp    Compute the exponential map from se(3) to SE(3).
