@@ -5,39 +5,57 @@ function xi = log_se3(T)
 R = T(1:3, 1:3);
 t = T(1:3, 4);
 
+% theta = acos((trace(R) - 1)/2);
+% [V, D] = eig(R);  %
+% if abs(real(D(3,3)) - 1) < 0.00001
+%     phi_unit = V(:, 3);
+%     phi = theta * V(:, 3);
+% else
+%     fprintf("R:\n")
+%     disp(R);
+%     fprintf("V:\n")
+%     disp(V);
+%     fprintf("D:\n")
+%     disp(D);
+%     returnw
+% end
 theta = acos((trace(R) - 1)/2);
-[V, D] = eig(R);  %
-if abs(real(D(3,3)) - 1) < 0.00001
-    phi = theta * V(:, 3);
-else
-    fprintf("R:\n")
-    disp(R);
-    fprintf("V:\n")
-    disp(V);
-    fprintf("D:\n")
-    disp(D);
-end
+axis = 1 / (2 * sin(theta)) * [R(3,2) - R(2,3); R(1,3) - R(3,1); R(2,1) - R(1,2)];
+phi = theta * axis;
 
-phi = xi(1:3);
-rou = xi(4:6);
-o13 = zeros(1,3);
-
-theta = norm(phi);
 if theta < 1e-10
-    R = eye(3);
-    T = [R rou; o13 1];
     return;
 end
-phi_unit = phi / theta;
-phi_up = [           0  -phi_unit(3)  phi_unit(2);
-           phi_unit(3)             0 -phi_unit(1);
-          -phi_unit(2)  phi_unit(1)             0]; % 反对称矩阵
 
-R = cos(theta)*eye(3) + (1-cos(theta))* (phi_unit * phi_unit') + sin(theta)*phi_up;
+% phi_up = [           0  -phi_unit(3)  phi_unit(2);
+%            phi_unit(3)             0 -phi_unit(1);
+%           -phi_unit(2)  phi_unit(1)             0]; % 反对称矩阵
+% 
+% J = sin(theta) / theta * eye(3) ...
+%     + (1 - sin(theta) / theta) * (phi_unit * phi_unit') ...
+%     + (1 - cos(theta)) / theta * phi_up;
 
 J = sin(theta) / theta * eye(3) ...
-    + (1 - sin(theta) / theta) * (phi_unit * phi_unit') ...
-    + (1 - cos(theta)) / theta * phi_up;
-T = [R J*rou; o13 1];
+    + (1 - sin(theta) / theta) * (axis * axis') ...
+    + (1 - cos(theta)) / theta * skew(axis);
 
+rou = J \ t;
+xi = [phi;rou];
+
+% fprintf("theta = %f\n", theta)
+% fprintf("phi = \n")
+% disp(phi)
+% fprintf("J = \n")
+% disp(J)
+
+
+end
+
+
+function S = skew(w)
+% skew    Returns the 3x3 skew‑symmetric matrix of a 3‑vector.
+%   S = skew(w) generates the matrix such that S * v = w × v for any v.
+    S = [0,    -w(3),  w(2);
+         w(3),  0,    -w(1);
+        -w(2),  w(1),  0];
 end
