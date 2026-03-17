@@ -347,7 +347,8 @@ l0_seq = [l0;l0;l0;l0;l0];
 p_seq = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
 joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
-keni_sol_forward_once(joint_q0, p_seq)
+p_seq2 = 0.001*rand(6,34);
+keni_sol_forward(joint_q0, p_seq, 1e-6);
 
 
 

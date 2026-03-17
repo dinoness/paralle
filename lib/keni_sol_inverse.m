@@ -95,7 +95,7 @@ u1p = p1p - r1r0;
 v1p = q1p - r1r0;
 q15 = Paden_Kahan1(u1p,v1p,axis15);
 
-joint_q(:, 1) = [0;q15;q14;q11;q12;q13];
+joint_q(:, 1) = [q11;q12;q13;q14;q15;0];
 
 % UPS
 for i_limb = 2 : 5

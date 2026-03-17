@@ -44,6 +44,7 @@ Pos_err_seq = zeros(5, seq_len);  % 位姿估计误差，优化的目标
 Pos_delta_seq = zeros(5, seq_len);  % 位姿扰动序列
 % ----- end input data ------
 
+%% 标定步骤
 for im = 1 : seq_len
     pos_ref = Pos_ref_seq(:, im);
     % 逆解参考位姿
