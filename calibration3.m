@@ -344,8 +344,12 @@ T_xi6 = (T01*T12*T23*T34*T45*T56) * T_zeta6 / (T01*T12*T23*T34*T45*T56);
 % q5 = -0.6435
 
 l0_seq = [l0;l0;l0;l0;l0];
-joint_q0 = keni_sol_inverse(T_ref, limb_dir, B, r1, r2, l0_seq, P_m);
-keni_sol_forward_once(joint_q0, limb_dir, B, r1, r2, l0_seq, P_m)
+p_seq = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+
+joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
+keni_sol_forward_once(joint_q0, p_seq)
+
+
 
 % T01*T_zeta1*T12*T_zeta2*T23*T_zeta3*T34*T45*T56*T_p
 % T_xi1 * T_xi2 * T_xi3 * T_e0

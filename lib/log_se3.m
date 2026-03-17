@@ -1,61 +1,61 @@
 function xi = log_se3(T)
-%  EXP_SE3 se(3)李群对数映射
-%  input: T 4*4矩阵
-%  output: xi 6*1向量，旋转/位移
-R = T(1:3, 1:3);
-t = T(1:3, 4);
+    % SE3_to_se3: 将 4x4 变换矩阵 T 映射为 6x1 李代数向量 xi = [rho; omega]
+    % 输入: T - 4x4 齐次变换矩阵
+    % 输出: xi - 6x1 李代数向量 [rho1, rho2, rho3, omega1, omega2, omega3]'
 
-% theta = acos((trace(R) - 1)/2);
-% [V, D] = eig(R);  %
-% if abs(real(D(3,3)) - 1) < 0.00001
-%     phi_unit = V(:, 3);
-%     phi = theta * V(:, 3);
-% else
-%     fprintf("R:\n")
-%     disp(R);
-%     fprintf("V:\n")
-%     disp(V);
-%     fprintf("D:\n")
-%     disp(D);
-%     returnw
-% end
-theta = acos((trace(R) - 1)/2);
-axis = 1 / (2 * sin(theta)) * [R(3,2) - R(2,3); R(1,3) - R(3,1); R(2,1) - R(1,2)];
-phi = theta * axis;
+    R = T(1:3, 1:3);
+    t = T(1:3, 4);
 
-if theta < 1e-10
-    return;
-end
+    % 1. 计算旋转角 theta
+    tr_R = trace(R);
+    theta = acos((tr_R - 1) / 2);
 
-% phi_up = [           0  -phi_unit(3)  phi_unit(2);
-%            phi_unit(3)             0 -phi_unit(1);
-%           -phi_unit(2)  phi_unit(1)             0]; % 反对称矩阵
-% 
-% J = sin(theta) / theta * eye(3) ...
-%     + (1 - sin(theta) / theta) * (phi_unit * phi_unit') ...
-%     + (1 - cos(theta)) / theta * phi_up;
+    % 2. 处理特殊情况：旋转极小时 (theta -> 0)
+    if abs(theta) < 1e-6
+        omega = [0; 0; 0];
+        V_inv = eye(3);
+    elseif abs(theta - pi) < 1e-6
+        % 情况 2: 旋转接近 180度 (theta -> pi)
+        % 此时 R = 2*v*v' - I, 提取旋转轴 v
+        v2 = [ (R(1,1)+1)/2; (R(2,2)+1)/2; (R(3,3)+1)/2 ];
+        v2(v2 < 0) = 0; % 防止数值误差导致负数
+        v = sqrt(v2);
+        
+        % 确定符号
+        if v(1) > 0
+            v(2) = v(2) * sign(R(1,2));
+            v(3) = v(3) * sign(R(1,3));
+        elseif v(2) > 0
+            v(3) = v(3) * sign(R(2,3));
+        end
+        
+        omega = theta * v;
+        
+        % 计算 V_inv
+        omega_skew = [0, -omega(3), omega(2);
+                      omega(3), 0, -omega(1);
+                     -omega(2), omega(1), 0];
+        V_inv = eye(3) - 0.5 * omega_skew + ...
+                (1/theta^2 * (1 - (theta * sin(theta)) / (2 * (1 - cos(theta))))) * (omega_skew^2);
+    else
+        % 计算旋转向量的方向单位向量 (利用 R - R')
+        omega_hat_skew = (theta / (2 * sin(theta))) * (R - R');
+        omega = [omega_hat_skew(3, 2); omega_hat_skew(1, 3); omega_hat_skew(2, 1)];
+        
+        % 3. 计算 V 的逆矩阵，用于求解 rho
+        % V = I + (1-cos(theta))/theta^2 * omega_hat + (theta-sin(theta))/theta^3 * omega_hat^2
+        % 这里直接给出 V_inv 的闭式解以提高效率
+        omega_skew = [0, -omega(3), omega(2);
+                      omega(3), 0, -omega(1);
+                     -omega(2), omega(1), 0];
+        
+        V_inv = eye(3) - 0.5 * omega_skew + ...
+                (1/theta^2 * (1 - (theta * sin(theta)) / (2 * (1 - cos(theta))))) * (omega_skew^2);
+    end
 
-J = sin(theta) / theta * eye(3) ...
-    + (1 - sin(theta) / theta) * (axis * axis') ...
-    + (1 - cos(theta)) / theta * skew(axis);
+    % 4. 计算 rho
+    rho = V_inv * t;
 
-rou = J \ t;
-xi = [phi;rou];
-
-% fprintf("theta = %f\n", theta)
-% fprintf("phi = \n")
-% disp(phi)
-% fprintf("J = \n")
-% disp(J)
-
-
-end
-
-
-function S = skew(w)
-% skew    Returns the 3x3 skew‑symmetric matrix of a 3‑vector.
-%   S = skew(w) generates the matrix such that S * v = w × v for any v.
-    S = [0,    -w(3),  w(2);
-         w(3),  0,    -w(1);
-        -w(2),  w(1),  0];
+    % 5. 组合成 6 维向量
+    xi = [omega; rho];
 end
