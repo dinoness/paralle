@@ -354,10 +354,23 @@ B_delta = B;
 B_delta(3,5) = B_delta(3,5) + 2;
 p_seq2 = parameterize(limb_dir, B_delta, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
-% keni_sol_forward_once(joint_q0, p_seq2)
-keni_sol_forward(joint_q0, p_seq2, 1e-6)
+%% Calibration error model
+J = jacobian_space(joint_q0, p_seq);  % 6*6 - 5
+J2 = J(:,:,2);
+J2_passive = [J2(:, 1:2) J2(:,4:6)];
+Omega = [zeros(3,3) eye(3); eye(3) zeros(3,3)];
+xi_2 = null(J2_passive'*Omega)  
 
-% jacobian verifire
+
+
+
+%% keni_sol_forward
+% keni_sol_forward_once(joint_q0, p_seq2)
+% keni_sol_forward(joint_q0, p_seq2, 1e-8)
+
+
+
+%% jacobian verifire
 % tol = 1e-2;
 % joint_q1 = joint_q0 + [tol*ones(1,5);zeros(5,5)];
 % T2 = keni_sol_forward_once(joint_q1, p_seq);

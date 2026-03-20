@@ -34,9 +34,11 @@ P = zeros(3, 5);    % 末端点坐标
 
 % -----end-struct-parameter------
 
-err = 1e-6;
+err_max = 1e-6;
 loop_max = 10;
+a_dis = 0.1;  % 扰动幅度
 % ----- input data ------
+% 当前难题，不知道测量得到的数据格式是什么，所以这里假定能通过数据处理软件得到三维位姿，此处用旋量扰动代替
 Pos_m_seq = [0.01;-0.01;-600.02;0.001;-0.001];  % line=5 colum=n
 Pos_ref_seq = [0;30;-600;0;10];  % line=5 colum=n  角度的单位是° **一列为一组**
 seq_len = length(Pos_ref_seq(1, :));
@@ -45,31 +47,45 @@ Pos_delta_seq = zeros(5, seq_len);  % 位姿扰动序列
 % ----- end input data ------
 
 %% 标定步骤
+p_seq_nom = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+T_cal_seq = zeros(4, 4, seq_len);
+T_measure_seq = zeros(4, 4, seq_len);
+joint_seq_iter = zeros(6, 5, seq_len);
+err_iter = zeros(6*seq_len, 1);
+p_seq_iter = p_seq_nom;  % 结构参数序列
+
+
+%% 计算名义参数下，理想位姿的运动学正逆解
 for im = 1 : seq_len
-    pos_ref = Pos_ref_seq(:, im);
-    % 逆解参考位姿
-    joint_q_ref = keni_sol_inverse(pos_ref, limb_dir, B, r1, r2, l0_seq, P_m);
+    % 名义与测量位姿
+    T_cal_seq(:,:,im) = pos2trans(Pos_ref_seq(:, im), B);
+    screw_temp = log_se3(T_ref_seq(:,:,im)) + a_dis * rand(6, 1);
+    T_measure_seq(:,:,im) = exp_se3(screw_temp);  % 通过添加扰动获得实际位姿（之后用数据替代）
 
-    % 引入真实位姿，判断误差是否小于容差，是则结束，否则进入迭代
-    calib_loop = 0;
-    while (condition)  % 写判断条件
-        if calib_loop > loop_max
-            break;
-        end
-        % 更新运动学参数
+    % 初始关节量
+    joint_q_ref = keni_sol_inverse(T_ref_seq(:,:,im), B, l0_seq, P_m, p_seq_nom);
+    joint_seq_iter(:,:,im) = joint_q_ref;
 
-        forwrad_keni_loop = 0;
-        % 进入正解循环
-        while (condition)
-            if forwrad_keni_loop > loop_max
-                break;
-            end
+    % 计算测量值与参考值之间的误差
+    err_seq_iter(6*(im-1)+1 : 6*im) = log_se3(T_measure_seq(:,:,im) / T_cal_seq(:,:,im));
+end
 
-            
 
-            forwrad_keni_loop = forwrad_keni_loop + 1;
-        end
-        calib_loop = calib_loop + 1;
-    end
+%% 引入真实位姿，判断误差是否小于容差，是则结束，否则进入迭代
+calib_loop = 0;
+while norm(err_iter) > err_max
+    % 更新运动学参数
+
     
+    for im = 1 : seq_len
+        % 新运动学参数下的正解
+        T_cal_seq(:,:,im) = keni_sol_forward(joint_seq_iter(:,:,im), p_seq_iter, err_max);
+        % 计算位姿误差
+        err_seq_iter(6*(im-1)+1 : 6*im) = log_se3(T_measure_seq(:,:,im) / T_cal_seq(:,:,im));
+    end
+
+    calib_loop = calib_loop + 1;
+    if calib_loop > loop_max
+        break;
+    end
 end

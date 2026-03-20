@@ -49,6 +49,13 @@ for i_joint = 1 : 5
     end
 end
 
+% 局部法（当前代码用的）
+% J1 = adjoint(T1(:,:,1), zeta_r);
+% J2 = adjoint(T1(:,:,1)*T1zeta(:,:,1)*T1(:,:,2), zeta_r);
+% J3 = adjoint(T1(:,:,1)*T1zeta(:,:,1)*T1(:,:,2)*T1zeta(:,:,2)*T1(:,:,3), zeta_r)
+% J4 = adjoint(T1(:,:,1)*T1zeta(:,:,1)*T1(:,:,2)*T1zeta(:,:,2)*T1(:,:,3)*T1zeta(:,:,3)*T1(:,:,4), zeta_p);
+% J5 = adjoint(T1(:,:,1)*T1zeta(:,:,1)*T1(:,:,2)*T1zeta(:,:,2)*T1(:,:,3)*T1zeta(:,:,3)*T1(:,:,4)*T1zeta(:,:,4)*T1(:,:,5), zeta_r);
+
 
 % 全局法，旋量本身要零位的，而算伴随矩阵要带上现有位姿的
 % xi1 = adjoint(T1(:,:,1),zeta_r);
