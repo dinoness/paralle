@@ -1,5 +1,5 @@
-function J = jacobian(joint_q, p_seq)
-% 计算速度雅克比
+function J = jacobian_space(joint_q, p_seq)
+% 计算空间雅克比
 
 J = zeros(6,6,5);
 

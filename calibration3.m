@@ -3,16 +3,18 @@ clear
 addpath(genpath('./lib'));
 %% 参数集
 %--------parameter3--------
+unit_para = 1;  % 0.001表示m，1表示mm
+
 T = readtable('parameters.xlsx', 'Range', 'A2:B12');
 paras = table2array(T(:, 2));
-l_max = paras(1);
-l_min = paras(2);  % 670
-R1 = paras(3);  % 550
-R2 = paras(4);  % 500
-H = paras(5);  % 0
-r1 = paras(6);  % 100
-r2 = paras(7);  % 80
-h = paras(8);  % 10
+l_max = paras(1)*unit_para;
+l_min = paras(2)*unit_para;  % 670
+R1 = paras(3)*unit_para;  % 550
+R2 = paras(4)*unit_para;  % 500
+H = paras(5)*unit_para;  % 0
+r1 = paras(6)*unit_para;  % 100
+r2 = paras(7)*unit_para;  % 80
+h = paras(8)*unit_para;  % 10
 
 limb_dir = [pi/2; 7*pi/6; -pi/6; pi/6; 5*pi/6];
 B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
@@ -35,8 +37,8 @@ P = zeros(3, 5);    % 末端点坐标
 % -----end-parameter3------
 
 % ----- input data ------
-Pos_m_seq = [0.01;-0.01;-600.02;0.001;-0.001];  % line=5 colum=n
-Pos_ref_seq = [0;30;-600;0;10];  % line=5 colum=n  角度的单位是° **一列为一组**
+Pos_m_seq = [0.01*unit_para;-0.01*unit_para;-600.02*unit_para;0.001*unit_para;-0.001];  % line=5 colum=n
+Pos_ref_seq = [0*unit_para;30*unit_para;-600*unit_para;0;10];  % line=5 colum=n  角度的单位是° **一列为一组**
 seq_len = length(Pos_ref_seq(1, :));
 Pos_err_seq = zeros(5, seq_len);  % 位姿估计误差，优化的目标
 Pos_delta_seq = zeros(5, seq_len);  % 位姿扰动序列
@@ -347,10 +349,52 @@ l0_seq = [l0;l0;l0;l0;l0];
 p_seq = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
 joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
-p_seq2 = 0.001*rand(6,34);
-keni_sol_forward(joint_q0, p_seq, 1e-6);
 
+B_delta = B;
+B_delta(3,5) = B_delta(3,5) + 2;
+p_seq2 = parameterize(limb_dir, B_delta, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
+% keni_sol_forward_once(joint_q0, p_seq2)
+keni_sol_forward(joint_q0, p_seq2, 1e-6)
 
-% T01*T_zeta1*T12*T_zeta2*T23*T_zeta3*T34*T45*T56*T_p
-% T_xi1 * T_xi2 * T_xi3 * T_e0
+% jacobian verifire
+% tol = 1e-2;
+% joint_q1 = joint_q0 + [tol*ones(1,5);zeros(5,5)];
+% T2 = keni_sol_forward_once(joint_q1, p_seq);
+% errj = log_se3(T2(:,:,2)/T_ref);
+% errj2 = log_se3(T_ref\T2(:,:,2));
+% j_errj = errj / tol
+% j_errj2 = errj2 / tol
+% Jb = jacobian_body(joint_q0, p_seq);
+% Jb(:,:,2)
+% Jp = jacobian_space(joint_q0, p_seq);
+% Jp(:,:,2)
+
+% tol = 1e-2;
+% joint_q1 = joint_q0 + [zeros(2,5);tol*ones(1,5);zeros(3,5)];
+% T2 = keni_sol_forward_once(joint_q1, p_seq);
+% errj = log_se3(T2(:,:,1)/T_ref);
+% errj2 = log_se3(T_ref\T2(:,:,1));
+% j_errj = errj / tol
+% j_errj2 = errj2 / tol
+% Jb = jacobian_body(joint_q0, p_seq);
+% Jb(:,:,1)
+% Jp = jacobian_space(joint_q0, p_seq);
+% Jp(:,:,1)
+
+% tol = 1e-2;
+% i_limb = 1;
+% joint_q1 = joint_q0 + [zeros(5,5);tol*ones(1,5)];
+% T2 = keni_sol_forward_once(joint_q1, p_seq);
+% errj = log_se3(T2(:,:,i_limb)/T_ref);
+% errj2 = log_se3(T_ref\T2(:,:,i_limb));
+% j_errj = errj / tol
+% j_errj2 = errj2 / tol
+% Jb = jacobian_body(joint_q0, p_seq);
+% Jb(:,:,i_limb)
+% Jp = jacobian_space(joint_q0, p_seq);
+% Jp(:,:,i_limb)
+
+% jacobian_space(joint_q0, p_seq)
+% jacobian_body(joint_q0, p_seq)
+
