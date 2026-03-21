@@ -359,10 +359,15 @@ J = jacobian_space(joint_q0, p_seq);  % 6*6 - 5
 J2 = J(:,:,2);
 J2_passive = [J2(:, 1:2) J2(:,4:6)];
 Omega = [zeros(3,3) eye(3); eye(3) zeros(3,3)];
-xi_2 = null(J2_passive'*Omega)  
+xi_2 = null(J2_passive'*Omega);
 
+[A1,A2]=calib_iter_matrix(joint_q0, p_seq)
 
-
+% blocks = cell(1, 3);
+% blocks{1} = [1 2;1 2];
+% blocks{2} = [2 3 4; 4 5 6; 1 2 3];
+% blocks{3} = [1 1; 0 1];
+% blkdiag(blocks{:})
 
 %% keni_sol_forward
 % keni_sol_forward_once(joint_q0, p_seq2)

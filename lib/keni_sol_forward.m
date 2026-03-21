@@ -90,7 +90,8 @@ while norm(err) > err_max  % sum(abs(err))
 end
 
 % 输出误差曲线
-plot(err_list(1:loop));
+% plot(err_list(1:loop));
+
 
 T_actual = mean(T0, 3);
 

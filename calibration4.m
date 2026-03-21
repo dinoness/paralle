@@ -32,11 +32,16 @@ P_m = [P1_m P2_m P3_m P4_m P5_m];
 P_v = zeros(3, 5);  % 只变换了方向，没变换起点
 P = zeros(3, 5);    % 末端点坐标
 
+
+l0 = 600;  % 默认初始支链长度
+l0_seq = [l0;l0;l0;l0;l0];
+joint_u_angle_tilt = 155 / 180 * pi;
 % -----end-struct-parameter------
 
-err_max = 1e-6;
+err_max = 1e-3;
 loop_max = 10;
 a_dis = 0.1;  % 扰动幅度
+
 % ----- input data ------
 % 当前难题，不知道测量得到的数据格式是什么，所以这里假定能通过数据处理软件得到三维位姿，此处用旋量扰动代替
 Pos_m_seq = [0.01;-0.01;-600.02;0.001;-0.001];  % line=5 colum=n
@@ -51,7 +56,7 @@ p_seq_nom = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 T_cal_seq = zeros(4, 4, seq_len);
 T_measure_seq = zeros(4, 4, seq_len);
 joint_seq_iter = zeros(6, 5, seq_len);
-err_iter = zeros(6*seq_len, 1);
+err_seq_iter = zeros(6*seq_len, 1);
 p_seq_iter = p_seq_nom;  % 结构参数序列
 
 
@@ -59,11 +64,11 @@ p_seq_iter = p_seq_nom;  % 结构参数序列
 for im = 1 : seq_len
     % 名义与测量位姿
     T_cal_seq(:,:,im) = pos2trans(Pos_ref_seq(:, im), B);
-    screw_temp = log_se3(T_ref_seq(:,:,im)) + a_dis * rand(6, 1);
+    screw_temp = log_se3(T_cal_seq(:,:,im)) + a_dis * rand(6, 1);
     T_measure_seq(:,:,im) = exp_se3(screw_temp);  % 通过添加扰动获得实际位姿（之后用数据替代）
 
     % 初始关节量
-    joint_q_ref = keni_sol_inverse(T_ref_seq(:,:,im), B, l0_seq, P_m, p_seq_nom);
+    joint_q_ref = keni_sol_inverse(T_cal_seq(:,:,im), B, l0_seq, P_m, p_seq_nom);
     joint_seq_iter(:,:,im) = joint_q_ref;
 
     % 计算测量值与参考值之间的误差
@@ -73,9 +78,17 @@ end
 
 %% 引入真实位姿，判断误差是否小于容差，是则结束，否则进入迭代
 calib_loop = 0;
-while norm(err_iter) > err_max
+Jp_bar = zeros(6*seq_len, 204);
+err_list = zeros(loop_max,1);
+while norm(err_seq_iter) > err_max
     % 更新运动学参数
+    for im = 1 : seq_len
+        Jp_bar(6*(im-1)+1 : 6*(im-1) + 6, :) = calib_iter_matrix(joint_seq_iter(:,:,im), p_seq_iter);
+    end
 
+    
+    p_seq_vec = p_seq_iter(:) + pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;  % A(:)矩阵按列排列成列向量
+    p_seq_iter = reshape(p_seq_vec, size(p_seq_iter, 1), size(p_seq_iter, 2));  % 将向量重排为矩阵
     
     for im = 1 : seq_len
         % 新运动学参数下的正解
@@ -85,7 +98,11 @@ while norm(err_iter) > err_max
     end
 
     calib_loop = calib_loop + 1;
+    err_list(calib_loop) = norm(err_seq_iter);
     if calib_loop > loop_max
         break;
     end
 end
+
+fig = figure('Color', [1 1 1]);
+plot(err_list(1:calib_loop))
