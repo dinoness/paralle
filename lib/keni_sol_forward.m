@@ -15,7 +15,7 @@ T0 = keni_sol_forward_once(joint_q_, p_seq);
 err = err_cal(T0);
 
 J_q = zeros(6,6,5);  % 初始雅可比，其中SPR支链第六列全为0
-loop_max = 100;
+loop_max = 15;
 loop = 0;
 J_passive = zeros(6,5,5);  % 去除主动关节后的雅可比矩阵
 joint_passive = zeros(24, 1);  % 所有被动关节排列成列向量，也删除了SPR关节的多出的0
@@ -102,6 +102,9 @@ end
 function err = err_cal(T)
     err = zeros(24, 1);
     for i_limb = 1 : 4
+        if rcond(T(:,:,i_limb)) < 1e-14
+            disp(T(:,:,i_limb));
+        end
         err(6*(i_limb-1)+1 : 6*(i_limb-1)+6) = log_se3(T(:,:,i_limb+1)/T(:,:,i_limb));
     end
 end

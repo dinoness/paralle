@@ -98,8 +98,11 @@ for i_limb = 2 : 5
         T2xi(:,:,i_joint) = T_temp * T_zeta / T_temp;
     end
 
+    % 调试用
     J2_passive = [J(:, 1:2, i_limb) J(:, 4:6, i_limb)];
+    % fprintf("i_limb = %d, rank(J2_passive) = %d\n",i_limb, rank(J2_passive));
     Xi2 = null(J2_passive'*Omega);
+
     Ap2 = blkdiag( ...
                 Ap(p_seq(:, 7*(i_limb-1))), ...
                 Ap(p_seq(:, 7*(i_limb-1)+1)), ...

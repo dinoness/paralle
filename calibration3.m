@@ -355,13 +355,13 @@ B_delta(3,5) = B_delta(3,5) + 2;
 p_seq2 = parameterize(limb_dir, B_delta, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
 %% Calibration error model
-J = jacobian_space(joint_q0, p_seq);  % 6*6 - 5
-J2 = J(:,:,2);
-J2_passive = [J2(:, 1:2) J2(:,4:6)];
-Omega = [zeros(3,3) eye(3); eye(3) zeros(3,3)];
-xi_2 = null(J2_passive'*Omega);
+% J = jacobian_space(joint_q0, p_seq);  % 6*6 - 5
+% J2 = J(:,:,2);
+% J2_passive = [J2(:, 1:2) J2(:,4:6)];
+% Omega = [zeros(3,3) eye(3); eye(3) zeros(3,3)];
+% xi_2 = null(J2_passive'*Omega);
 
-[A1,A2]=calib_iter_matrix(joint_q0, p_seq)
+% [A1,A2]=calib_iter_matrix(joint_q0, p_seq)
 
 % blocks = cell(1, 3);
 % blocks{1} = [1 2;1 2];
@@ -371,7 +371,7 @@ xi_2 = null(J2_passive'*Omega);
 
 %% keni_sol_forward
 % keni_sol_forward_once(joint_q0, p_seq2)
-% keni_sol_forward(joint_q0, p_seq2, 1e-8)
+keni_sol_forward(joint_q0, p_seq2, 1e-8)
 
 
 

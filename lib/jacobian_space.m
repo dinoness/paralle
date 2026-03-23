@@ -9,7 +9,7 @@ zeta_p = [0;0;0;0;0;1];  % 平移基底
 
 % SPR
 T1 = zeros(4,4,6);
-T1xi = zeros(4,4,5);
+% T1xi = zeros(4,4,5);
 T1zeta = zeros(4,4,5);
 
 for i_joint = 1 : 6
@@ -30,7 +30,7 @@ for i_joint = 1 : 5
     end
 
     T1zeta(:,:,i_joint) = T_zeta;
-    T1xi(:,:,i_joint) = T_temp * T_zeta / T_temp;
+    % T1xi(:,:,i_joint) = T_temp * T_zeta / T_temp;
 end
 
 % 计算雅可比

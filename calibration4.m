@@ -39,13 +39,29 @@ joint_u_angle_tilt = 155 / 180 * pi;
 % -----end-struct-parameter------
 
 err_max = 1e-3;
-loop_max = 10;
+loop_max = 5;
 a_dis = 0.1;  % 扰动幅度
 
 % ----- input data ------
+% 参考序列生成
+x_seq = [-5 0 5];
+y_seq = [-5 0 5];
+z_seq = [-600 -615 -630];
+theta_seq = [-5 0 5];
+Pos_ref_seq = zeros(5, 3*3*3);
+for ix = 1:3
+    for iy = 1:3
+        for iz = 1:3
+            % for itheta = 1:3
+            %     Pos_ref_seq(:, (ix-1)*27+(iy-1)*9+(iz-1)*3+(itheta)) = [x_seq(ix); y_seq(iy); z_seq(iz); 0; theta_seq(itheta)];
+            % end
+            Pos_ref_seq(:, (ix-1)*9+(iy-1)*3+iz) = [x_seq(ix); y_seq(iy); z_seq(iz); 0; 0];
+        end
+    end
+end
 % 当前难题，不知道测量得到的数据格式是什么，所以这里假定能通过数据处理软件得到三维位姿，此处用旋量扰动代替
-Pos_m_seq = [0.01;-0.01;-600.02;0.001;-0.001];  % line=5 colum=n
-Pos_ref_seq = [0;30;-600;0;10];  % line=5 colum=n  角度的单位是° **一列为一组**
+% Pos_m_seq = [0.01;-0.01;-600.02;0.001;-0.001];  % line=5 colum=n
+% Pos_ref_seq = [0;30;-600;0;10];  % line=5 colum=n  角度的单位是° **一列为一组**
 seq_len = length(Pos_ref_seq(1, :));
 Pos_err_seq = zeros(5, seq_len);  % 位姿估计误差，优化的目标
 Pos_delta_seq = zeros(5, seq_len);  % 位姿扰动序列
@@ -87,7 +103,7 @@ while norm(err_seq_iter) > err_max
     end
 
     
-    p_seq_vec = p_seq_iter(:) + pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;  % A(:)矩阵按列排列成列向量
+    p_seq_vec = p_seq_iter(:) + 0.000001 * pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;  % A(:)矩阵按列排列成列向量
     p_seq_iter = reshape(p_seq_vec, size(p_seq_iter, 1), size(p_seq_iter, 2));  % 将向量重排为矩阵
     
     for im = 1 : seq_len
@@ -106,3 +122,7 @@ end
 
 fig = figure('Color', [1 1 1]);
 plot(err_list(1:calib_loop))
+
+
+% 当前的正解容易发散，当结构参数变化过大，如其中一个量变了10
+% 位姿迭代矩阵步幅大，且迭代方向不对，即使补偿乘了1e-6的系数，误差也一直增大
