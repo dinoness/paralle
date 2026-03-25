@@ -371,7 +371,7 @@ p_seq2 = parameterize(limb_dir, B_delta, r1, r2, l0_seq, P_m, joint_u_angle_tilt
 
 %% keni_sol_forward
 % keni_sol_forward_once(joint_q0, p_seq2)
-keni_sol_forward(joint_q0, p_seq2, 1e-8)
+% keni_sol_forward(joint_q0, p_seq2, 1e-8)
 
 
 
@@ -415,4 +415,32 @@ keni_sol_forward(joint_q0, p_seq2, 1e-8)
 
 % jacobian_space(joint_q0, p_seq)
 % jacobian_body(joint_q0, p_seq)
+
+%% force analysis
+Z3 = Z(log_se3(T_xi3));
+rank(Z3)
+function Z = Z(screw)
+    omega = screw(1:3);
+    nu = screw(4:6);
+    
+    Z = [skew(omega) zeros(3,3); skew(nu) skew(omega)];
+end
+
+
+
+% 转动关节：绕 x 轴转动
+xi_rev = [1;0;0;0;0;0];
+[N_rev, R_rev, Q_rev] = null_rowspace_z(log_se3(T_xi4));
+disp('转动关节零空间维数:'); size(N_rev,2)   % 应为 2
+disp('转动关节行空间维数:'); size(R_rev,2)   % 应为 4
+% 验证正交性
+disp('N_rev 的列是否标准正交:'); norm(N_rev'*N_rev - eye(2))  % 应接近0
+disp('R_rev 的列是否标准正交:'); norm(R_rev'*R_rev - eye(4))  % 应接近0
+
+% 移动关节：沿 z 轴移动
+xi_pri = [0;0;0;0;0;1];
+% [N_pri, R_pri, Q_pri] = null_rowspace_z(log_se3(T_xi3));
+% disp('移动关节零空间维数:'); size(N_pri,2)   % 应为 4
+% disp('移动关节行空间维数:'); size(R_pri,2)   % 应为 2
+N_pri = null_rowspace_z(log_se3(T_xi3))
 

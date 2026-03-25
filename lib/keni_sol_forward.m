@@ -1,4 +1,4 @@
-function T_actual = keni_sol_forward(joint_q, p_seq, err_max)
+function [T_actual, joint_q_] = keni_sol_forward(joint_q, p_seq, err_max)
 % p_seq __ line 螺旋量维数 = 6; colum 各轴排列 = 34 % 1-6,7-13,14-20,21-27,28-34
 % joint_q __ line 单轴参数 = 6; colum 总共轴数 = 5 %
 if(~exist('err','var'))
@@ -6,8 +6,8 @@ if(~exist('err','var'))
 end
 
 T_actual = zeros(4, 4);
-tol = 1e-6;  % 矩阵移项
-alpha = 0.01;  % 迭代步长因子
+tol = 1e-5;  % 矩阵移项
+alpha = 0.5;  % 迭代步长因子
 
 
 joint_q_ = joint_q;
@@ -15,7 +15,7 @@ T0 = keni_sol_forward_once(joint_q_, p_seq);
 err = err_cal(T0);
 
 J_q = zeros(6,6,5);  % 初始雅可比，其中SPR支链第六列全为0
-loop_max = 15;
+loop_max = 50;
 loop = 0;
 J_passive = zeros(6,5,5);  % 去除主动关节后的雅可比矩阵
 joint_passive = zeros(24, 1);  % 所有被动关节排列成列向量，也删除了SPR关节的多出的0
@@ -53,7 +53,8 @@ while norm(err) > err_max  % sum(abs(err))
                      zeros(6,4)          zeros(6,5)    J_passive(:,:,3) -1*J_passive(:,:,4)          zeros(6,5);
                      zeros(6,4)          zeros(6,5)          zeros(6,5)    J_passive(:,:,4) -1*J_passive(:,:,5)];
     
-    joint_passive = joint_passive + pinv(J_all'*J_all) * J_all' * err;
+    % joint_passive = joint_passive + alpha * pinv(J_all'*J_all) * J_all' * err;
+    joint_passive = joint_passive + alpha * ((J_all'*J_all + tol*eye(24)) \ (J_all' * err));
     % joint_passive = joint_passive + alpha * (J_all'*J_all) \ J_all' * err;
     % joint_passive = joint_passive + J_all \ err;
     % disp("joint_passive");
@@ -91,7 +92,10 @@ end
 
 % 输出误差曲线
 % plot(err_list(1:loop));
-
+if err_list(end) > 2
+    disp(err_list(end));
+    error("--- 运动学正解未收敛 ---");
+end
 
 T_actual = mean(T0, 3);
 
@@ -103,7 +107,7 @@ function err = err_cal(T)
     err = zeros(24, 1);
     for i_limb = 1 : 4
         if rcond(T(:,:,i_limb)) < 1e-14
-            disp(T(:,:,i_limb));
+            % disp(T(:,:,i_limb));
         end
         err(6*(i_limb-1)+1 : 6*(i_limb-1)+6) = log_se3(T(:,:,i_limb+1)/T(:,:,i_limb));
     end

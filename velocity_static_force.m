@@ -15,7 +15,7 @@ r1 = paras(6);  % 100
 r2 = paras(7);  % 80
 h = paras(8);  % 100
 
-pos_plant = [0; 0; -555];  % 后面作图用，不参与空间搜索
+pos_plant = [0; 0; -530];  % 后面作图用，不参与空间搜索
 alpha_plant = paras(9) / 180 * pi;  % 绕 x
 beta_plant = paras(10) / 180 * pi;  % 绕 y
 gamma_plant = paras(11) / 180 * pi;  % 绕 z
@@ -132,7 +132,7 @@ if force_solve_flag == 1
         plot3([B(1, i) P(1, i)], [B(2, i) P(2, i)], [B(3, i) P(3, i)], '-', 'Color', '#4682B4');
     end
 
-    axis equal
+    
 
     % draw force
     % 画arrow需要横向量
@@ -161,6 +161,7 @@ if force_solve_flag == 1
     xlabel("x");
     ylabel("y")
     zlabel("z")
+    axis equal
 
     fprintf('>= 可能由于没考虑形变，计算正确性待考究 =<\n');
     fprintf('>>>= static_force done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
@@ -181,3 +182,4 @@ if velocity_solve_flag == 1
 end
 
 
+% 如何证明你的解算是正确的？

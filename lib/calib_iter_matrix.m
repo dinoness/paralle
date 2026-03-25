@@ -15,6 +15,10 @@ zeta_p = [0;0;0;0;0;1];  % 平移基底
 T1 = zeros(4,4,6);
 T1xi = zeros(4,4,5);
 T1zeta = zeros(4,4,5);
+U1_blocks = cell(1, 6);
+U1_blocks{6} = eye(6);
+D1_blocks = cell(1, 6);
+D1_blocks{6} = eye(6);
 
 for i_joint = 1 : 6
     T1(:,:,i_joint) = exp_se3(p_seq(:, i_joint));
@@ -29,16 +33,20 @@ for i_joint = 1 : 5
 
     if i_joint ~= 4
         T_zeta = exp_se3(zeta_r * joint_q(i_joint,1));
+        U1_blocks{i_joint} = adjoint_m(T_temp) * zeta_r;
     else
         T_zeta = exp_se3(zeta_p * joint_q(i_joint,1));
+        U1_blocks{i_joint} = adjoint_m(T_temp) * zeta_p;
     end
 
     T1zeta(:,:,i_joint) = T_zeta;
     T1xi(:,:,i_joint) = T_temp * T_zeta / T_temp;
+    D1_blocks{i_joint} = adjoint_m(T1xi(:,:,i_joint));
+    
 end
 
 J1_passive = [J(:, 1:3, 1) J(:, 5, 1)];
-Xi1 = null(J1_passive'*Omega);
+Xi1 = null(J1_passive'*Omega);  % 对应论文公式2-42
 Ap1 = blkdiag(Ap(p_seq(:,1)), ...
                 Ap(p_seq(:,2)), ...
                 Ap(p_seq(:,3)), ...
@@ -60,6 +68,9 @@ Gamma1 = [eye(6), ...
         adj_m(T1xi(:,:,1))*adj_m(T1xi(:,:,2))*adj_m(T1xi(:,:,3))*adj_m(T1xi(:,:,4)), ...
         adj_m(T1xi(:,:,1))*adj_m(T1xi(:,:,2))*adj_m(T1xi(:,:,3))*adj_m(T1xi(:,:,4))*adj_m(T1xi(:,:,5))];
 
+U1 = blkdiag(U1_blocks{:});
+D1 = blkdiag(D1_blocks{:});
+
 % 可验证与直接算Jp1相等，分开算是为了后续便于去除冗余参数
 % Jp1 = [Ap(p_seq(:,1)), ...
 %         adj_m(T1(:,:,1)*T1zeta(:,:,1)) * Ap(p_seq(:,2)), ...
@@ -69,7 +80,7 @@ Gamma1 = [eye(6), ...
 %         adj_m(T1(:,:,1)*T1zeta(:,:,1)*T1(:,:,2)*T1zeta(:,:,2)*T1(:,:,3)*T1zeta(:,:,3)*T1(:,:,4)*T1zeta(:,:,4)*T1(:,:,5)*T1zeta(:,:,5)) * Ap(p_seq(:,6)) ];
 
 Jp1 = Gamma1*Lambda1*Ap1;
-Jp_blocks{1} = Xi1'*Omega*Jp1;
+Jp_blocks{1} = Xi1'*Omega*Jp1;  % 对应式2-45
 Xi_bar(1:2, :) = Xi1'*Omega;
 
 
@@ -156,10 +167,10 @@ function A = Ap(screw)
     nu = screw(4:6);
     
     Z = [skew(omega) zeros(3,3); skew(nu) skew(omega)];
-    phi = norm(screw);
+    phi = norm(omega);  % 是旋转模长，不包括线速度
 
-    if phi == 0
-        A = eye(6) + 0.5 * Z;
+    if phi < 1e-5
+        A = eye(6) + 0.5 * Z + (1/6) * (Z*Z);
     else
         S = sin(phi);
         C = cos(phi);

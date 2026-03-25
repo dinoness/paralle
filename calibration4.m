@@ -1,18 +1,20 @@
 % 参考文献：c02 并联机构的运动学误差建模及参数可辨识性分析_孔令雨
 clear
 addpath(genpath('./lib'));
+
+unit_para = 0.001;  % 0.001表示m，1表示mm
 %% 参数集
 %--------struct parameter--------
 T = readtable('parameters.xlsx', 'Range', 'A2:B12');
 paras = table2array(T(:, 2));
-l_max = paras(1);
-l_min = paras(2);  % 670
-R1 = paras(3);  % 550
-R2 = paras(4);  % 500
-H = paras(5);  % 0
-r1 = paras(6);  % 100
-r2 = paras(7);  % 80
-h = paras(8);  % 10
+l_max = paras(1)*unit_para;
+l_min = paras(2)*unit_para;  % 670
+R1 = paras(3)*unit_para;  % 550
+R2 = paras(4)*unit_para;  % 500
+H = paras(5)*unit_para;  % 0
+r1 = paras(6)*unit_para;  % 100
+r2 = paras(7)*unit_para;  % 80
+h = paras(8)*unit_para;  % 10
 
 limb_dir = [pi/2; 7*pi/6; -pi/6; pi/6; 5*pi/6];
 B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
@@ -33,29 +35,29 @@ P_v = zeros(3, 5);  % 只变换了方向，没变换起点
 P = zeros(3, 5);    % 末端点坐标
 
 
-l0 = 600;  % 默认初始支链长度
+l0 = 600*unit_para;  % 默认初始支链长度
 l0_seq = [l0;l0;l0;l0;l0];
 joint_u_angle_tilt = 155 / 180 * pi;
 % -----end-struct-parameter------
 
 err_max = 1e-3;
-loop_max = 5;
-a_dis = 0.1;  % 扰动幅度
+loop_max = 30;
+a_dis = 0.003;  % 扰动幅度
 
 % ----- input data ------
 % 参考序列生成
-x_seq = [-5 0 5];
-y_seq = [-5 0 5];
-z_seq = [-600 -615 -630];
+x_seq = [-15 0 15] * unit_para;
+y_seq = [-15 0 15] * unit_para;
+z_seq = [-600 -650 -700] * unit_para;
 theta_seq = [-5 0 5];
-Pos_ref_seq = zeros(5, 3*3*3);
+Pos_ref_seq = zeros(5, 3*3*3*3);
 for ix = 1:3
     for iy = 1:3
         for iz = 1:3
-            % for itheta = 1:3
-            %     Pos_ref_seq(:, (ix-1)*27+(iy-1)*9+(iz-1)*3+(itheta)) = [x_seq(ix); y_seq(iy); z_seq(iz); 0; theta_seq(itheta)];
-            % end
-            Pos_ref_seq(:, (ix-1)*9+(iy-1)*3+iz) = [x_seq(ix); y_seq(iy); z_seq(iz); 0; 0];
+            for itheta = 1:3
+                Pos_ref_seq(:, (ix-1)*27+(iy-1)*9+(iz-1)*3+(itheta)) = [x_seq(ix); y_seq(iy); z_seq(iz); 0; theta_seq(itheta)];
+            end
+            % Pos_ref_seq(:, (ix-1)*9+(iy-1)*3+iz) = [x_seq(ix); y_seq(iy); z_seq(iz); 0; 0];
         end
     end
 end
@@ -96,19 +98,20 @@ end
 calib_loop = 0;
 Jp_bar = zeros(6*seq_len, 204);
 err_list = zeros(loop_max,1);
+lambda = 1e-3;
 while norm(err_seq_iter) > err_max
     % 更新运动学参数
     for im = 1 : seq_len
         Jp_bar(6*(im-1)+1 : 6*(im-1) + 6, :) = calib_iter_matrix(joint_seq_iter(:,:,im), p_seq_iter);
     end
 
-    
-    p_seq_vec = p_seq_iter(:) + 0.000001 * pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;  % A(:)矩阵按列排列成列向量
+    % p_seq_vec = p_seq_iter(:) + 0.000001 * (Jp_bar' * Jp_bar + lambda * eye(size(Jp_bar, 2))) \ (Jp_bar' * err_seq_iter);
+    p_seq_vec = p_seq_iter(:) + 0.00005 * pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;  % A(:)矩阵按列排列成列向量
     p_seq_iter = reshape(p_seq_vec, size(p_seq_iter, 1), size(p_seq_iter, 2));  % 将向量重排为矩阵
     
     for im = 1 : seq_len
         % 新运动学参数下的正解
-        T_cal_seq(:,:,im) = keni_sol_forward(joint_seq_iter(:,:,im), p_seq_iter, err_max);
+        [T_cal_seq(:,:,im), joint_seq_iter(:,:,im)] = keni_sol_forward(joint_seq_iter(:,:,im), p_seq_iter, err_max);
         % 计算位姿误差
         err_seq_iter(6*(im-1)+1 : 6*im) = log_se3(T_measure_seq(:,:,im) / T_cal_seq(:,:,im));
     end
