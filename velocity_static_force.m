@@ -4,30 +4,24 @@ velocity_solve_flag = 0;  % 1表示求解运动速度
 force_solve_flag = 1;  % 1表示求解静态力
 
 % Parameters
+unit_para = 0.001;  % 0.001表示m，1表示mm
+
 T = readtable('parameters.xlsx', 'Range', 'A2:B12');
 paras = table2array(T(:, 2));
-l_max = paras(1);
-l_min = paras(2);  % 670
-R1 = paras(3);  % 800
-R2 = paras(4);  % 600
-H = paras(5);  % 20
-r1 = paras(6);  % 100
-r2 = paras(7);  % 80
-h = paras(8);  % 100
+l_max = paras(1)*unit_para;
+l_min = paras(2)*unit_para;  % 670
+R1 = paras(3)*unit_para;  % 550
+R2 = paras(4)*unit_para;  % 500
+H = paras(5)*unit_para;  % 0
+r1 = paras(6)*unit_para;  % 100
+r2 = paras(7)*unit_para;  % 80
+h = paras(8)*unit_para;  % 10
 
-pos_plant = [0; 0; -530];  % 后面作图用，不参与空间搜索
+pos_plant = [0; 0; -600*unit_para];  % 后面作图用，不参与空间搜索
 alpha_plant = paras(9) / 180 * pi;  % 绕 x
 beta_plant = paras(10) / 180 * pi;  % 绕 y
 gamma_plant = paras(11) / 180 * pi;  % 绕 z
 
-% R1 = 800;  % 800
-% R2 = 600;  % 600
-% H = -60;  % 20
-% r1 = 120;  % 100
-% r2 = 100;  % 80
-% h = 20;  % 100
-% Lmax = 1000;
-% Lmin = 650;
 
 % Force
 g = 9.8;
@@ -52,12 +46,6 @@ P4_m = [r2*cos(pi/6);   r2*sin(pi/6);   h];
 P5_m = [r2*cos(5*pi/6); r2*sin(5*pi/6); h];
 P_m = [P1_m P2_m P3_m P4_m P5_m];
 
-
-% Position and Posture of Move Plant
-% pos_plant = [0; 0; -600];
-% alpha_plant = 0 / 180 * pi;
-% beta_plant = 0 / 180 * pi;
-% gamma_plant = 0 / 180 * pi;
 
 Rx = [1                0                 0;
       0 cos(alpha_plant) -sin(alpha_plant);
@@ -97,11 +85,9 @@ for i = 1 : 5
     P(:, i) = P_v(:, i) + pos_plant;
 end
 % cross常量取1表示列向量叉乘
-% 这两个J2取哪个还不知道，复杂点的是通过约束方程得出的雅可比矩阵直接换算过来的，简单点的是通过受力分析得来的
+% J2是通过约束方程得出的雅可比矩阵直接换算过来的，经过螺旋理论验证
 J2 = [cross(P_v, s_limb, 1)  ...
      (cross(P_v(:, 1 ), (R_plant * x_m)) + l_limb(1)*cross((R_plant * x_m), s_limb(:, 1)))];
-% J2 = [cross(P_v, s_limb, 1)  ...
-%       cross(P_v(:, 1 ), (R_plant * x_m))];
 
 J = [J1' J2'];
 % structure of J
@@ -120,16 +106,16 @@ if force_solve_flag == 1
 
     % plot
     fig = figure('Color', [1 1 1]);
-    plot3(B(1, :), B(2, :), B(3, :), 'o', 'Color', '#FF7F50');
+    plot3(B(1, :)/unit_para, B(2, :)/unit_para, B(3, :)/unit_para, 'o', 'Color', '#FF7F50');
     hold on
-    plot3(P(1, :), P(2, :), P(3, :), 'o', 'Color', '#32CD32');
-    B_plot = [B(:,1) B(:,5) B(:,2) B(:,3) B(:,4) B(:,1)];
-    P_plot = [P(:,1) P(:,5) P(:,2) P(:,3) P(:,4) P(:,1)];
+    plot3(P(1, :)/unit_para, P(2, :)/unit_para, P(3, :)/unit_para, 'o', 'Color', '#32CD32');
+    B_plot = [B(:,1) B(:,5) B(:,2) B(:,3) B(:,4) B(:,1)]/unit_para;
+    P_plot = [P(:,1) P(:,5) P(:,2) P(:,3) P(:,4) P(:,1)]/unit_para;
     plot3(B_plot(1, :), B_plot(2, :), B_plot(3, :), '-', 'Color', '#FF7F50');
     plot3(P_plot(1, :), P_plot(2, :), P_plot(3, :), '-', 'Color', '#32CD32');
 
     for i = 1 : 5
-        plot3([B(1, i) P(1, i)], [B(2, i) P(2, i)], [B(3, i) P(3, i)], '-', 'Color', '#4682B4');
+        plot3([B(1, i) P(1, i)]/unit_para, [B(2, i) P(2, i)]/unit_para, [B(3, i) P(3, i)]/unit_para, '-', 'Color', '#4682B4');
     end
 
     
@@ -138,20 +124,20 @@ if force_solve_flag == 1
     % 画arrow需要横向量
     K_force_draw = 3;  % 箭头绘图放大系数
 
-    p_st = pos_plant;
+    p_st = pos_plant/unit_para;
     p_ed = p_st + F_ex(1:3) * K_force_draw;
     arrow3(p_st', p_ed', 'b');
 
     for i = 1 : 5
         if abs(F_in(i)) > 0.01
-            p_st = P(:, i);
+            p_st = P(:, i)/unit_para;
             p_ed = p_st + s_limb(:, i) * F_in(i) * K_force_draw;
             arrow3(p_st', p_ed', 'r');
         end
     end
 
     if abs(F_in(6)) > 0.01
-        p_st = P(:, 1);
+        p_st = P(:, 1)/unit_para;
         p_ed = p_st + R_plant * x_m * F_in(6) * K_force_draw;
         arrow3(p_st', p_ed', 'r');
     end
@@ -163,7 +149,7 @@ if force_solve_flag == 1
     zlabel("z")
     axis equal
 
-    fprintf('>= 可能由于没考虑形变，计算正确性待考究 =<\n');
+    fprintf('>= 此力表示支链受到的外力方向，正表示拉 =<\n');
     fprintf('>>>= static_force done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 end
 
@@ -182,4 +168,4 @@ if velocity_solve_flag == 1
 end
 
 
-% 如何证明你的解算是正确的？
+% 如何证明你的解算是正确的（经过螺旋理论验证，但是没有考虑重力）

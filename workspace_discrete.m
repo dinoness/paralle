@@ -16,7 +16,7 @@ r2 = paras(7);  % 80
 h = paras(8);  % 100
 
 pos_plant = [0; 0; -800];  % 后面作图用，不参与空间搜索
-alpha_plant = paras(9) / 180 * pi;  % 绕 x
+alpha_plant = -10 / 180 * pi;  % 绕 x
 beta_plant = paras(10) / 180 * pi;  % 绕 y
 gamma_plant = paras(11) / 180 * pi;  % 绕 z
 

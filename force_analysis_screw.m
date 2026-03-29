@@ -2,7 +2,7 @@ clear
 addpath(genpath('./lib'));
 %% 参数集
 %--------parameter3--------
-unit_para = 1;  % 0.001表示m，1表示mm
+unit_para = 0.001;  % 0.001表示m，1表示mm
 
 T = readtable('parameters.xlsx', 'Range', 'A2:B12');
 paras = table2array(T(:, 2));
@@ -79,7 +79,7 @@ end
 U(:, :, 1) = U1;
 Omega = [zeros(3,3) eye(3); eye(3) zeros(3,3)];
 C1 = null(U1(:, 1:5)' * Omega);
-ST(:, 1) = [U1(4:6,4);cross((B1),U1(4:6,4))];  % 纯力，将运动方向转移到上层，并以基座标为原点，叉乘上过支链点的矢量
+ST(:, 1) = [U1(4:6,4);cross((B1 - Pos_ref_seq(1:3)),U1(4:6,4))];  % 纯力，将运动方向转移到上层，并以基座标为原点，叉乘上过支链点的矢量
 
 % UPS
 U2 = zeros(6, 6);
@@ -109,8 +109,8 @@ for i_limb = 2 : 5
     end
 
     U(:, :, i_limb) = U2;
-    % ST(:, i_limb) = [U2(4:6,3);cross(B(:,i_limb),U2(4:6,3))];
-    ST(:, i_limb) = null([U2(:, 1:2) U2(:, 4:6)]' * Omega);
+    ST(:, i_limb) = [U2(4:6,3);cross((B(:,i_limb)- Pos_ref_seq(1:3)),U2(4:6,3))];
+    % ST(:, i_limb) = null([U2(:, 1:2) U2(:, 4:6)]' * Omega);
 
 end
 
