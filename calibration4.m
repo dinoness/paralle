@@ -41,7 +41,7 @@ joint_u_angle_tilt = 155 / 180 * pi;
 % -----end-struct-parameter------
 
 err_max = 1e-3;
-loop_max = 30;
+loop_max = 25;
 a_dis = 0.003;  % 扰动幅度
 
 % ----- input data ------
@@ -82,6 +82,7 @@ p_seq_iter = p_seq_nom;  % 结构参数序列
 for im = 1 : seq_len
     % 名义与测量位姿
     T_cal_seq(:,:,im) = pos2trans(Pos_ref_seq(:, im), B);
+    rng(0313+im);  % 随机数种子
     screw_temp = log_se3(T_cal_seq(:,:,im)) + a_dis * rand(6, 1);
     T_measure_seq(:,:,im) = exp_se3(screw_temp);  % 通过添加扰动获得实际位姿（之后用数据替代）
 
@@ -98,15 +99,19 @@ end
 calib_loop = 0;
 Jp_bar = zeros(6*seq_len, 204);
 err_list = zeros(loop_max,1);
-lambda = 1e-3;
-while norm(err_seq_iter) > err_max
+lambda = 1e-1;
+
+err_cur = norm(err_seq_iter);
+while err_cur > err_max
     % 更新运动学参数
     for im = 1 : seq_len
         Jp_bar(6*(im-1)+1 : 6*(im-1) + 6, :) = calib_iter_matrix(joint_seq_iter(:,:,im), p_seq_iter);
     end
 
-    % p_seq_vec = p_seq_iter(:) + 0.000001 * (Jp_bar' * Jp_bar + lambda * eye(size(Jp_bar, 2))) \ (Jp_bar' * err_seq_iter);
-    p_seq_vec = p_seq_iter(:) + 0.00005 * pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;  % A(:)矩阵按列排列成列向量
+    pk = (Jp_bar' * Jp_bar + lambda * eye(size(Jp_bar, 2))) \ (Jp_bar' * err_seq_iter);
+    p_seq_vec = p_seq_iter(:) + pk;  % A(:)矩阵按列排列成列向量
+
+    % p_seq_vec = p_seq_iter(:) + 0.001 * pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;
     p_seq_iter = reshape(p_seq_vec, size(p_seq_iter, 1), size(p_seq_iter, 2));  % 将向量重排为矩阵
     
     for im = 1 : seq_len
@@ -116,11 +121,27 @@ while norm(err_seq_iter) > err_max
         err_seq_iter(6*(im-1)+1 : 6*im) = log_se3(T_measure_seq(:,:,im) / T_cal_seq(:,:,im));
     end
 
+    
+    % 阻尼系数迭代
+    err_new = norm(err_seq_iter);
+    delta_err = err_new - err_cur;
+    delta_qk = -1 *( (Jp_bar'*err_seq_iter)'*pk + 0.5*pk'*(Jp_bar'*Jp_bar)*pk );
+    eta = delta_err / delta_qk;
+            
+    if eta > 0.75
+        lambda = lambda * 0.8;
+    elseif eta < 0.25
+        lambda = lambda * 2;
+    end
+    
+
     calib_loop = calib_loop + 1;
-    err_list(calib_loop) = norm(err_seq_iter);
+    err_cur = err_new;
+    err_list(calib_loop) = err_cur;
     if calib_loop > loop_max
         break;
     end
+    fprintf("loop = %d\n", calib_loop);
 end
 
 fig = figure('Color', [1 1 1]);
@@ -129,3 +150,7 @@ plot(err_list(1:calib_loop))
 
 % 当前的正解容易发散，当结构参数变化过大，如其中一个量变了10
 % 位姿迭代矩阵步幅大，且迭代方向不对，即使补偿乘了1e-6的系数，误差也一直增大
+
+% keni_sol_forward_once(joint_seq_iter(:,:,1),p_seq_iter)
+% T_measure_seq(:,:,1)
+% T_cal_seq(:,:,1)

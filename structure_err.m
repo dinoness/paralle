@@ -50,10 +50,9 @@ joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
 
 B_delta = B;
 % B_delta(3,3) = B_delta(3,3) - 0.1;
-B_delta(3,2) = B_delta(3,2) + 0.010;
+B_delta(3,2) = B_delta(3,2) + 0.005;
 B_delta(2,2) = B_delta(2,2) + 0.010;
 B_delta(3,1) = B_delta(3,1) - 0.010;
-B_delta(3,1) = B_delta(3,1) + 0.010;
 
 
 
