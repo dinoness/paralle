@@ -41,7 +41,7 @@ joint_u_angle_tilt = 155 / 180 * pi;
 % -----end-struct-parameter------
 
 err_max = 1e-3;
-loop_max = 25;
+loop_max = 0;
 a_dis = 0.003;  % 扰动幅度
 
 % ----- input data ------
@@ -70,13 +70,13 @@ Pos_delta_seq = zeros(5, seq_len);  % 位姿扰动序列
 % ----- end input data ------
 
 %% 标定步骤
-p_seq_nom = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+[p_seq_nom, xi_seq_nom] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 T_cal_seq = zeros(4, 4, seq_len);
 T_measure_seq = zeros(4, 4, seq_len);
 joint_seq_iter = zeros(6, 5, seq_len);
 err_seq_iter = zeros(6*seq_len, 1);
 p_seq_iter = p_seq_nom;  % 结构参数序列
-
+xi_seq_iter = xi_seq_nom;
 
 %% 计算名义参数下，理想位姿的运动学正逆解
 for im = 1 : seq_len
@@ -97,18 +97,24 @@ end
 
 %% 引入真实位姿，判断误差是否小于容差，是则结束，否则进入迭代
 calib_loop = 0;
-Jp_bar = zeros(6*seq_len, 204);
+Jp_bar = zeros(6*seq_len, 112);
 err_list = zeros(loop_max,1);
 lambda = 1e-1;
 
 err_cur = norm(err_seq_iter);
 while err_cur > err_max
+    [U, V_prep, V] = calib_iter_row_space_matrix(xi_seq_iter);
+    [Lambda, Ap] = calib_iter_restore_matrix(p_seq_iter);
     % 更新运动学参数
     for im = 1 : seq_len
-        Jp_bar(6*(im-1)+1 : 6*(im-1) + 6, :) = calib_iter_matrix(joint_seq_iter(:,:,im), p_seq_iter);
+        % Jp_bar(6*(im-1)+1 : 6*(im-1) + 6, :) = calib_iter_matrix(joint_seq_iter(:,:,im), p_seq_iter);
+        Jp_bar(6*(im-1)+1 : 6*(im-1) + 6, :) = calib_iter_matrix2(joint_seq_iter(:,:,im), p_seq_iter, xi_seq_iter, U, V_prep);
     end
+    
 
     pk = (Jp_bar' * Jp_bar + lambda * eye(size(Jp_bar, 2))) \ (Jp_bar' * err_seq_iter);
+    
+    delta_p_seq = ;  % 怎么还原++++++++
     p_seq_vec = p_seq_iter(:) + pk;  % A(:)矩阵按列排列成列向量
 
     % p_seq_vec = p_seq_iter(:) + 0.001 * pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;
