@@ -41,7 +41,7 @@ joint_u_angle_tilt = 155 / 180 * pi;
 % -----end-struct-parameter------
 
 err_max = 1e-3;
-loop_max = 0;
+loop_max = 100;
 a_dis = 0.003;  % 扰动幅度
 
 % ----- input data ------
@@ -103,7 +103,10 @@ lambda = 1e-1;
 
 err_cur = norm(err_seq_iter);
 while err_cur > err_max
-    [U, V_prep, V] = calib_iter_row_space_matrix(xi_seq_iter);
+    [U, N, V_prep, M] = calib_iter_row_space_matrix(xi_seq_iter);
+    % size(U{1})
+    % size(V_prep{1})
+    % size(V{1})
     [Lambda, Ap] = calib_iter_restore_matrix(p_seq_iter);
     % 更新运动学参数
     for im = 1 : seq_len
@@ -114,11 +117,13 @@ while err_cur > err_max
 
     pk = (Jp_bar' * Jp_bar + lambda * eye(size(Jp_bar, 2))) \ (Jp_bar' * err_seq_iter);
     
-    delta_p_seq = ;  % 怎么还原++++++++
-    p_seq_vec = p_seq_iter(:) + pk;  % A(:)矩阵按列排列成列向量
-
-    % p_seq_vec = p_seq_iter(:) + 0.001 * pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;
+    delta_p_seq = restore_full_param_increment(pk, U, V_prep, Lambda, Ap);  % 依据式(3-28)恢复为原始运动学参数
+    p_seq_vec = p_seq_iter(:) + delta_p_seq(:);  % A(:)矩阵按列排列成列向量
     p_seq_iter = reshape(p_seq_vec, size(p_seq_iter, 1), size(p_seq_iter, 2));  % 将向量重排为矩阵
+    % p_seq_vec = p_seq_iter(:) + 0.001 * pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;
+    
+
+    xi_seq_iter = rebuild_xi_seq_from_p(p_seq_iter);  % 更新零位全局旋量坐标，供下一轮迭代使用
     
     for im = 1 : seq_len
         % 新运动学参数下的正解
@@ -130,14 +135,14 @@ while err_cur > err_max
     
     % 阻尼系数迭代
     err_new = norm(err_seq_iter);
-    delta_err = err_new - err_cur;
-    delta_qk = -1 *( (Jp_bar'*err_seq_iter)'*pk + 0.5*pk'*(Jp_bar'*Jp_bar)*pk );
+    delta_err = err_new - err_cur;  % 实际下降
+    delta_qk = -1 *( (Jp_bar'*err_seq_iter)'*pk + 0.5*pk'*(Jp_bar'*Jp_bar)*pk );  % 期望下降
     eta = delta_err / delta_qk;
             
     if eta > 0.75
-        lambda = lambda * 0.8;
+        lambda = lambda * 0.75;
     elseif eta < 0.25
-        lambda = lambda * 2;
+        lambda = lambda * 5;
     end
     
 
@@ -151,11 +156,9 @@ while err_cur > err_max
 end
 
 fig = figure('Color', [1 1 1]);
-plot(err_list(1:calib_loop))
+plot(0:calib_loop-1, err_list(1:calib_loop))
 
 
-% 当前的正解容易发散，当结构参数变化过大，如其中一个量变了10
-% 位姿迭代矩阵步幅大，且迭代方向不对，即使补偿乘了1e-6的系数，误差也一直增大
 
 % keni_sol_forward_once(joint_seq_iter(:,:,1),p_seq_iter)
 % T_measure_seq(:,:,1)

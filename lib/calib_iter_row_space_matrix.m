@@ -1,23 +1,29 @@
-function [U, V_prep, V] = calib_iter_row_space_matrix(xi_seq)
+function [U, N, V_prep, M] = calib_iter_row_space_matrix(xi_seq)
 % inupt ：关节零位全局坐标 1-6,7-13,14-20,21-27,28-34
 % output：行空间矩阵
 
 U = cell(1, 5);
+N = cell(1, 5);
 V = cell(1, 5);
 V_prep = cell(1, 5);
+M = cell(1, 5);
 
 % SPR支链
+N1_blk = cell(1, 6);
 U1_blk = cell(1, 6);
 Xi_bar1_blk = cell(1, 5);
 
 for i_joint = 1 : 5
     Xi_bar1_blk{i_joint} = xi_seq(:, i_joint);
-    [~, R] = null_rowspace_z(xi_seq(:, i_joint));
-    U1_blk{i_joint} = R;
+    [Null_space, Row_space] = null_rowspace_z(xi_seq(:, i_joint));
+    N1_blk{i_joint} = [Row_space Null_space];
+    U1_blk{i_joint} = Row_space;
 end
 
 U1_blk{6} = eye(6);
+N1_blk{6} = eye(6);
 U{1} = blkdiag(U1_blk{:});
+N{1} = blkdiag(N1_blk{:});
 
 Xi_bar1_blk(4) = [];  % 删除移动副
 Xi_bar1 = blkdiag(Xi_bar1_blk{:});
@@ -28,21 +34,26 @@ Xi_bar1 = [Xi_bar1(1:3*6, :);
 Delta_5 = construct_delta(5);  % 实际是36*36，5是因为只有5个关节
 V{1} = U{1}' * Delta_5 * Xi_bar1;
 V_prep{1} = null(V{1}');
+M{1} = [V_prep{1} V{1}];
 
 
 % UPS支链
 
 for i_limb = 2 : 5
+    N2_blk = cell(1, 7);
     U2_blk = cell(1, 7);
     Xi_bar2_blk = cell(1, 6);
     for i_joint = 1 : 6
         Xi_bar2_blk{i_joint} = xi_seq(:, 7*(i_limb-1) + (i_joint-1));
-        [~, R] = null_rowspace_z(xi_seq(:, 7*(i_limb-1) + (i_joint-1)));
-        U2_blk{i_joint} = R;
+        [Null_space, Row_space] = null_rowspace_z(xi_seq(:, 7*(i_limb-1) + (i_joint-1)));
+        N2_blk{i_joint} = [Row_space Null_space];
+        U2_blk{i_joint} = Row_space;
     end
 
     U2_blk{7} = eye(6);
+    N2_blk{7} = eye(6);
     U{i_limb} = blkdiag(U2_blk{:});
+    N{i_limb} = blkdiag(N2_blk{:});
 
     Xi_bar2_blk(3) = [];  % 删除移动副
     Xi_bar2 = blkdiag(Xi_bar2_blk{:});
@@ -55,6 +66,7 @@ for i_limb = 2 : 5
     Delta_6 = construct_delta(6);  % 实际是42*42，6是因为只有6个关节
     V{i_limb} = U{i_limb}' * Delta_6 * Xi_bar2;
     V_prep{i_limb} = null(V{i_limb}');
+    M{i_limb} = [V_prep{i_limb} V{i_limb}];
 end
 
 
