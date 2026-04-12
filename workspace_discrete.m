@@ -4,7 +4,7 @@ gif_generate_flag = 0;  % 1为开启录制功能，运行一次程序后记得�
 
 % 还没有考虑关节角度的限制
 %--------parameter3--------
-T = readtable('parameters.xlsx', 'Range', 'A2:B12');
+T = readtable('parameters.xlsx', 'Range', 'A2:B13');
 paras = table2array(T(:, 2));
 l_max = paras(1);
 l_min = paras(2);  % 670
@@ -14,6 +14,7 @@ H = paras(5);  % 20
 r1 = paras(6);  % 100
 r2 = paras(7);  % 80
 h = paras(8);  % 100
+L_tool = paras(12);
 
 pos_plant = [0; 0; -800];  % 后面作图用，不参与空间搜索
 alpha_plant = -10 / 180 * pi;  % 绕 x
@@ -30,11 +31,12 @@ gamma_plant = paras(11) / 180 * pi;  % 绕 z
 % h = 20;  % 100
 
 % static plant
+limb_dir = [pi/2; 7*pi/6; -pi/6; deg2rad(50); deg2rad(130)];
 B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
 B2 = [R1*cos(7*pi/6); R1*sin(7*pi/6); 0];
 B3 = [R1*cos(-pi/6);  R1*sin(-pi/6);  0];
-B4 = [R2*cos(pi/6);   R2*sin(pi/6);   H];
-B5 = [R2*cos(5*pi/6); R2*sin(5*pi/6); H];
+B4 = [R2*cos(limb_dir(4));   R2*sin(limb_dir(4));   H];
+B5 = [R2*cos(limb_dir(5));   R2*sin(limb_dir(5));   H];
 B = [B1 B2 B3 B4 B5];
 
 
@@ -59,11 +61,11 @@ Rz = [cos(gamma_plant) -sin(gamma_plant) 0;
 R_plant = Rz * Ry * Rx;
 
 % move plant parameter
-P1_m = [r1*cos(pi/2);   r1*sin(pi/2);   0];
-P2_m = [r1*cos(7*pi/6); r1*sin(7*pi/6); 0];
-P3_m = [r1*cos(-pi/6);  r1*sin(-pi/6);  0];
-P4_m = [r2*cos(pi/6);   r2*sin(pi/6);   h];
-P5_m = [r2*cos(5*pi/6); r2*sin(5*pi/6); h];
+P1_m = [r1*cos(pi/2);   r1*sin(pi/2);   L_tool];
+P2_m = [r1*cos(7*pi/6); r1*sin(7*pi/6); L_tool];
+P3_m = [r1*cos(-pi/6);  r1*sin(-pi/6);  L_tool];
+P4_m = [r2*cos(limb_dir(4));   r2*sin(limb_dir(4));   h+L_tool];
+P5_m = [r2*cos(limb_dir(5)); r2*sin(limb_dir(5)); h+L_tool];
 P_m = [P1_m P2_m P3_m P4_m P5_m];
 P_v = zeros(3, 5);  % 只变换了方向，没变换起点
 P = zeros(3, 5);    % 末端点坐标
@@ -89,12 +91,12 @@ for i_ball = 1 : 5
     ball_vector(1, i_ball) = sin(ball_screw_dir_angle(1, i_ball)) * cos(ball_screw_dir_angle(2, i_ball));
     ball_vector(2, i_ball) = sin(ball_screw_dir_angle(1, i_ball)) * sin(ball_screw_dir_angle(2, i_ball));
     ball_vector(3, i_ball) = cos(ball_screw_dir_angle(1, i_ball));
-    ball_vector_world = R_plant * ball_vector;
 
     static_joint_vector(1, i_ball) = sin(static_joint_dir_angle(1, i_ball)) * cos(static_joint_dir_angle(2, i_ball));
     static_joint_vector(2, i_ball) = sin(static_joint_dir_angle(1, i_ball)) * sin(static_joint_dir_angle(2, i_ball));
     static_joint_vector(3, i_ball) = cos(static_joint_dir_angle(1, i_ball));
 end
+ball_vector_world = R_plant * ball_vector;
 % -----end-parameter3------
 
 
@@ -102,7 +104,7 @@ end
 % ------search space-------
 seq_x = -400 : 10 : 400;
 seq_y = -400 : 10 : 400;
-seq_z = -1000 : 10 : -500;
+seq_z = -1200 : 10 : -650;
 
 % assistant parameter
 wors_space = [];
@@ -124,6 +126,14 @@ for ix = 1 : length(seq_x)
             pos_flag = 0;  % 位置可达标志位
             s_limb = zeros(3, 5);  % 支链的方向向量
             l_limb = zeros(1, 5);  % 支链长度
+
+            Pos_ref = [seq_x(ix); seq_y(iy); seq_z(iz);40;20];
+            T_ref = pos2trans(Pos_ref, B);
+            R_plant = T_ref(1:3, 1:3);
+            for i = 1 : 5
+                P_v(:, i) = R_plant * P_m(:, i);
+            end
+
             
             for j = 1 : length(P_v(1, :))
                 vAa = vt + P_v(:, j) - B(:, j);
@@ -242,7 +252,7 @@ if fig_rotation_show == 1
 end
 
 
-fprintf('>>>= workspace_discrete done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
+fprintf('>>>= done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 
 
 

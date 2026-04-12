@@ -1,4 +1,4 @@
-function [p_seq, xi_seq] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt)
+function [p_seq, xi_seq] = parameterize(limb_dir,limb_dir_move, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt)
 % 给定几何参数，生成旋量序列
 p_seq = zeros(6, 34); % 1-6,7-13,14-20,21-27,28-34
 xi_seq = zeros(6, 34);  % 关节零位全局坐标
@@ -132,8 +132,8 @@ for i_limb = 2 : 5
 
     % 关节6到动平台中心转移矩阵(绕z)
     p_z = [-1;0;0];
-    p_x = [0;sin(pi-limb_dir(i_limb));cos(pi-limb_dir(i_limb))];
-    p_y = [0;sin(3/2*pi-limb_dir(i_limb));cos(3/2*pi-limb_dir(i_limb))];
+    p_x = [0;sin(pi-limb_dir_move(i_limb));cos(pi-limb_dir_move(i_limb))];
+    p_y = [0;sin(3/2*pi-limb_dir_move(i_limb));cos(3/2*pi-limb_dir_move(i_limb))];
     R_p = [p_x p_y p_z];
     t_p = [P_m(3,i_limb);0;r];
     T_p = [R_p t_p;o13 1];

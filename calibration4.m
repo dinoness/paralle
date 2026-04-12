@@ -40,7 +40,7 @@ l0_seq = [l0;l0;l0;l0;l0];
 joint_u_angle_tilt = 155 / 180 * pi;
 % -----end-struct-parameter------
 
-err_max = 1e-3;
+err_max = 1e-5;
 loop_max = 100;
 a_dis = 0.003;  % 扰动幅度
 
@@ -156,8 +156,11 @@ while err_cur > err_max
 end
 
 fig = figure('Color', [1 1 1]);
-plot(0:calib_loop-1, err_list(1:calib_loop))
-
+plot(0:calib_loop-1, err_list(1:calib_loop),'linewidth',1.5)
+set(gca,'linewidth',1.5,'fontsize',15,'fontname','Times New Roman');
+set(gcf,'unit','centimeters','position',[10 10 14 8]);
+xlabel('迭代次数', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
+ylabel('残余误差', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
 
 
 % keni_sol_forward_once(joint_seq_iter(:,:,1),p_seq_iter)

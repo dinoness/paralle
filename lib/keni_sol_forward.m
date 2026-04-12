@@ -59,7 +59,7 @@ while cur_err > err_max  % sum(abs(err))
     %                  zeros(6,4)          zeros(6,5)    J_passive(:,:,3) -1*J_passive(:,:,4)          zeros(6,5);
     %                  zeros(6,4)          zeros(6,5)          zeros(6,5)    J_passive(:,:,4) -1*J_passive(:,:,5)];
     
-    code_switch = 2;
+    code_switch = 2;  % 选择求解器------------------------------
     % joint_passive = joint_passive + alpha * pinv(J_all'*J_all) * J_all' * err;
     % joint_passive = joint_passive + alpha * ((J_all'*J_all + tol*eye(24)) \ (J_all' * err));
     % joint_passive = joint_passive + alpha * (J_all'*J_all) \ J_all' * err;
@@ -211,7 +211,12 @@ end
 
 % 输出误差曲线
 % fig = figure('Color', [1 1 1]);
-% plot(err_list(1:loop));
+% plot(err_list(1:loop), "LineWidth",1.5);
+% set(gca,'linewidth',1.5,'fontsize',15,'fontname','Times New Roman');
+% set(gcf,'unit','centimeters','position',[10 10 14 8]);
+% xlabel('迭代次数', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
+% ylabel('动平台位姿误差', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
+
 if err_list(end) > 2
     disp(err_list(end));
     error("--- 运动学正解未收敛 ---");

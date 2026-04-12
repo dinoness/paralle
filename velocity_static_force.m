@@ -17,7 +17,7 @@ r1 = paras(6)*unit_para;  % 100
 r2 = paras(7)*unit_para;  % 80
 h = paras(8)*unit_para;  % 10
 
-pos_plant = [0; 0; -600*unit_para];  % 后面作图用，不参与空间搜索
+pos_plant = [2*unit_para; 10*unit_para; -600*unit_para];  % 后面作图用，不参与空间搜索
 alpha_plant = paras(9) / 180 * pi;  % 绕 x
 beta_plant = paras(10) / 180 * pi;  % 绕 y
 gamma_plant = paras(11) / 180 * pi;  % 绕 z
@@ -26,10 +26,10 @@ gamma_plant = paras(11) / 180 * pi;  % 绕 z
 % Force
 g = 9.8;
 % F_ex = [0; 10*g; 0; 0; 0; 0];  % y
-% F_ex = [10*g; 0; 0; 0; 0; 0];  % x
-F_ex = [0; 0; -30*g; 0; 0; 0];  % z
+F_ex = [10*g; 0; 0; 0; 0; 0];  % x
+% F_ex = [0; 0; -30*g; 0; 0; 0];  % z
 % F_ex = [0; -3.5*g; -sqrt(3)*3.5*g; 0; 0; 0];
-
+% F_ex = [0;0;0;0;0.1;0];
 
 % Points
 B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
@@ -38,6 +38,8 @@ B3 = [R1*cos(-pi/6);  R1*sin(-pi/6);  0];
 B4 = [R2*cos(pi/6);   R2*sin(pi/6);   H];
 B5 = [R2*cos(5*pi/6); R2*sin(5*pi/6); H];
 B = [B1 B2 B3 B4 B5];
+
+B(3,2) = B(3,2) + 0.01;
 
 P1_m = [r1*cos(pi/2);   r1*sin(pi/2);   0];
 P2_m = [r1*cos(7*pi/6); r1*sin(7*pi/6); 0];
@@ -124,9 +126,11 @@ if force_solve_flag == 1
     % 画arrow需要横向量
     K_force_draw = 3;  % 箭头绘图放大系数
 
-    p_st = pos_plant/unit_para;
-    p_ed = p_st + F_ex(1:3) * K_force_draw;
-    arrow3(p_st', p_ed', 'b');
+    if abs(norm(F_ex(1:3))) > 0.01
+        p_st = pos_plant/unit_para;
+        p_ed = p_st + F_ex(1:3) * K_force_draw;
+        arrow3(p_st', p_ed', 'b');
+    end
 
     for i = 1 : 5
         if abs(F_in(i)) > 0.01
