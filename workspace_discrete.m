@@ -2,7 +2,7 @@ clear
 fig_rotation_show = 0;  % 1开启展示旋转
 gif_generate_flag = 0;  % 1为开启录制功能，运行一次程序后记得改文件名
 
-% 还没有考虑关节角度的限制
+addpath(genpath('./lib'));
 %--------parameter3--------
 T = readtable('parameters.xlsx', 'Range', 'A2:B13');
 paras = table2array(T(:, 2));
@@ -14,10 +14,10 @@ H = paras(5);  % 20
 r1 = paras(6);  % 100
 r2 = paras(7);  % 80
 h = paras(8);  % 100
-L_tool = paras(12);
+L_tool = 0;
 
 pos_plant = [0; 0; -800];  % 后面作图用，不参与空间搜索
-alpha_plant = -10 / 180 * pi;  % 绕 x
+alpha_plant = paras(10) / 180 * pi;  % 绕 x
 beta_plant = paras(10) / 180 * pi;  % 绕 y
 gamma_plant = paras(11) / 180 * pi;  % 绕 z
 
@@ -31,12 +31,13 @@ gamma_plant = paras(11) / 180 * pi;  % 绕 z
 % h = 20;  % 100
 
 % static plant
-limb_dir = [pi/2; 7*pi/6; -pi/6; deg2rad(50); deg2rad(130)];
-B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
-B2 = [R1*cos(7*pi/6); R1*sin(7*pi/6); 0];
-B3 = [R1*cos(-pi/6);  R1*sin(-pi/6);  0];
-B4 = [R2*cos(limb_dir(4));   R2*sin(limb_dir(4));   H];
-B5 = [R2*cos(limb_dir(5));   R2*sin(limb_dir(5));   H];
+limb_dir = [pi/2; 7*pi/6; -pi/6; deg2rad(45); deg2rad(135)];
+% limb_dir = [pi/2; deg2rad(-90-45); deg2rad(-90+45); deg2rad(45); deg2rad(135)];
+B1 = [R1*cos(limb_dir(1)); R1*sin(limb_dir(1)); 0];
+B2 = [R1*cos(limb_dir(2)); R1*sin(limb_dir(2)); 0];
+B3 = [R1*cos(limb_dir(3)); R1*sin(limb_dir(3)); 0];
+B4 = [R2*cos(limb_dir(4)); R2*sin(limb_dir(4)); H];
+B5 = [R2*cos(limb_dir(5)); R2*sin(limb_dir(5)); H];
 B = [B1 B2 B3 B4 B5];
 
 
@@ -127,7 +128,7 @@ for ix = 1 : length(seq_x)
             s_limb = zeros(3, 5);  % 支链的方向向量
             l_limb = zeros(1, 5);  % 支链长度
 
-            Pos_ref = [seq_x(ix); seq_y(iy); seq_z(iz);40;20];
+            Pos_ref = [seq_x(ix); seq_y(iy); seq_z(iz);0;0];
             T_ref = pos2trans(Pos_ref, B);
             R_plant = T_ref(1:3, 1:3);
             for i = 1 : 5
@@ -226,6 +227,22 @@ xlabel('x')
 ylabel('y')
 zlabel('z')
 
+p_pick = [0;0;0];
+fig2 = figure('Color', [1 1 1]);
+n = length(work_space_down(1,:));
+for i = 1 : n
+    if work_space_down(3, i) == -820
+        plot(work_space_down(1,i), work_space_down(2,i),'*')
+        hold on
+    end
+end
+for i = 1 : n
+    if work_space_down(3, i) == -740
+        plot(work_space_down(1,i), work_space_down(2,i),'*')
+        hold on
+    end
+end
+axis equal
 
 % view rotation
 axis vis3d

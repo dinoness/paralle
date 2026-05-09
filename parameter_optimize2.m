@@ -22,6 +22,7 @@ L_tool = 0;  % ===========================================
 
 % limb_dir = [pi/2; 7*pi/6; -pi/6; pi/6; 5*pi/6];
 limb_dir = [pi/2; 7*pi/6; -pi/6; pi/2-deg2rad(45); pi/2+deg2rad(45)];
+% limb_dir = [pi/2; deg2rad(-90-45); deg2rad(-90+45); deg2rad(45); deg2rad(135)];
 B1 = [R1*cos(limb_dir(1)); R1*sin(limb_dir(1)); 0];
 B2 = [R1*cos(limb_dir(2)); R1*sin(limb_dir(2)); 0];
 B3 = [R1*cos(limb_dir(3)); R1*sin(limb_dir(3)); 0];
@@ -30,7 +31,7 @@ B5 = [R2*cos(limb_dir(5)); R2*sin(limb_dir(5)); H];
 B = [B1 B2 B3 B4 B5];
 
 % move plant parameter
-limb_dir_move = [pi/2; 7*pi/6; -pi/6; pi/2-deg2rad(60); pi/2+deg2rad(60)];
+limb_dir_move = limb_dir;
 P1_m = [r1*cos(limb_dir_move(1)); r1*sin(limb_dir_move(1)); L_tool];
 P2_m = [r1*cos(limb_dir_move(2)); r1*sin(limb_dir_move(2)); L_tool];
 P3_m = [r1*cos(limb_dir_move(3)); r1*sin(limb_dir_move(3)); L_tool];
@@ -105,9 +106,7 @@ parfor ix = 1 : l_seq_x
                     % 先判断是否在工作区间中
                     pos_flag = 0;  % 位置可达标志位
                     Pos_ref = [seq_x(ix); seq_y(iy); seq_z(iz); seq_phi(iphi); seq_theta(itheta)];
-                    T_ref = pos2trans(Pos_ref, B);
-
-                    joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
+                    T_ref = pos2trans(Pos_ref, B);  
 
                     % 当前位形下平台关键点坐标
                     R_plant = T_ref(1:3, 1:3);
@@ -136,6 +135,8 @@ parfor ix = 1 : l_seq_x
                     if pos_flag < length(P_v(1, :))
                         continue;
                     end
+
+                    joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
 
                     % 变量定义
                     U = zeros(6, 6, 5);     % 每条支链的关节运动旋量（不足6列的部分补零）

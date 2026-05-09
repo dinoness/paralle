@@ -16,8 +16,10 @@ H = paras(5)*unit_para;  % 0
 r1 = paras(6)*unit_para;  % 100
 r2 = paras(7)*unit_para;  % 80
 h = paras(8)*unit_para;  % 10
+% L_tool = paras(12)*unit_para;
+L_tool = 0;  % ===========================================
 
-pos_plant = [2*unit_para; 10*unit_para; -600*unit_para];  % 后面作图用，不参与空间搜索
+pos_plant = [0*unit_para; 0*unit_para; -600*unit_para];  % 表示分析力时的位置
 alpha_plant = paras(9) / 180 * pi;  % 绕 x
 beta_plant = paras(10) / 180 * pi;  % 绕 y
 gamma_plant = paras(11) / 180 * pi;  % 绕 z
@@ -26,26 +28,33 @@ gamma_plant = paras(11) / 180 * pi;  % 绕 z
 % Force
 g = 9.8;
 % F_ex = [0; 10*g; 0; 0; 0; 0];  % y
-F_ex = [10*g; 0; 0; 0; 0; 0];  % x
-% F_ex = [0; 0; -30*g; 0; 0; 0];  % z
+% F_ex = [10*g; 0; 0; 0; 0; 0];  % x
+% F_ex = [0; 0; -250; 0; 0; 0];  % z
 % F_ex = [0; -3.5*g; -sqrt(3)*3.5*g; 0; 0; 0];
-% F_ex = [0;0;0;0;0.1;0];
+% 力作用点
+p_f_ex = [-50.5; 166.5; -40] * unit_para;
+f_ex = [-30; 0; 0];
+m_ex = [0; -f_ex(1)*p_f_ex(3); -f_ex(1)*p_f_ex(2)];
+F_ex = [f_ex; m_ex];
 
 % Points
-B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
-B2 = [R1*cos(7*pi/6); R1*sin(7*pi/6); 0];
-B3 = [R1*cos(-pi/6);  R1*sin(-pi/6);  0];
-B4 = [R2*cos(pi/6);   R2*sin(pi/6);   H];
-B5 = [R2*cos(5*pi/6); R2*sin(5*pi/6); H];
+limb_dir = [pi/2; 7*pi/6; -pi/6; pi/2-deg2rad(45); pi/2+deg2rad(45)];
+% limb_dir = [pi/2; deg2rad(-90-45); deg2rad(-90+45); deg2rad(45); deg2rad(135)];
+% limb_dir = [pi/2; 7*pi/6; -pi/6; pi/6; 5*pi/6];
+B1 = [R1*cos(limb_dir(1)); R1*sin(limb_dir(1)); 0];
+B2 = [R1*cos(limb_dir(2)); R1*sin(limb_dir(2)); 0];
+B3 = [R1*cos(limb_dir(3)); R1*sin(limb_dir(3)); 0];
+B4 = [R2*cos(limb_dir(4)); R2*sin(limb_dir(4)); H];
+B5 = [R2*cos(limb_dir(5)); R2*sin(limb_dir(5)); H];
 B = [B1 B2 B3 B4 B5];
 
-B(3,2) = B(3,2) + 0.01;
-
-P1_m = [r1*cos(pi/2);   r1*sin(pi/2);   0];
-P2_m = [r1*cos(7*pi/6); r1*sin(7*pi/6); 0];
-P3_m = [r1*cos(-pi/6);  r1*sin(-pi/6);  0];
-P4_m = [r2*cos(pi/6);   r2*sin(pi/6);   h];
-P5_m = [r2*cos(5*pi/6); r2*sin(5*pi/6); h];
+% move plant parameter
+limb_dir_move = limb_dir;
+P1_m = [r1*cos(limb_dir_move(1)); r1*sin(limb_dir_move(1)); L_tool];
+P2_m = [r1*cos(limb_dir_move(2)); r1*sin(limb_dir_move(2)); L_tool];
+P3_m = [r1*cos(limb_dir_move(3)); r1*sin(limb_dir_move(3)); L_tool];
+P4_m = [r2*cos(limb_dir_move(4)); r2*sin(limb_dir_move(4)); L_tool + h];
+P5_m = [r2*cos(limb_dir_move(5)); r2*sin(limb_dir_move(5)); L_tool + h];
 P_m = [P1_m P2_m P3_m P4_m P5_m];
 
 
@@ -106,6 +115,7 @@ J = [J1' J2'];
 if force_solve_flag == 1
     F_in = (J')\F_ex;  % 注意雅克比矩阵需要转置，具体为何见推导过程
 
+
     % plot
     fig = figure('Color', [1 1 1]);
     plot3(B(1, :)/unit_para, B(2, :)/unit_para, B(3, :)/unit_para, 'o', 'Color', '#FF7F50');
@@ -154,6 +164,16 @@ if force_solve_flag == 1
     axis equal
 
     fprintf('>= 此力表示支链受到的外力方向，正表示拉 =<\n');
+
+    % 用于仿真，调整力的坐标方向
+    A = [-1 0 0;0 0 1;0 1 0];
+    F_ans = zeros(3,6);
+    for i = 1 : 5
+        F_ans(:, i) = A * s_limb(:, i) * F_in(i);
+    end
+    F_ans(:,1) = F_ans(:,1)+A*R_plant * x_m*F_in(6);
+    F_ans;
+
     fprintf('>>>= static_force done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 end
 

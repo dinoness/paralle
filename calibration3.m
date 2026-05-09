@@ -346,13 +346,16 @@ T_xi6 = (T01*T12*T23*T34*T45*T56) * T_zeta6 / (T01*T12*T23*T34*T45*T56);
 % q5 = -0.6435
 
 l0_seq = [l0;l0;l0;l0;l0];
-p_seq = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+limb_dir_move = [pi/2; 7*pi/6; -pi/6; pi/2-deg2rad(50); pi/2+deg2rad(50)];
+p_seq = parameterize(limb_dir, limb_dir_move, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
 joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
+T2 = keni_sol_forward_once(joint_q0, p_seq);
 
 B_delta = B;
 B_delta(3,5) = B_delta(3,5) + 2;
-p_seq2 = parameterize(limb_dir, B_delta, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+
+p_seq2 = parameterize(limb_dir, limb_dir_move, B_delta, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
 %% Calibration error model
 % J = jacobian_space(joint_q0, p_seq);  % 6*6 - 5
@@ -443,7 +446,3 @@ end
 % % disp('移动关节零空间维数:'); size(N_pri,2)   % 应为 4
 % % disp('移动关节行空间维数:'); size(R_pri,2)   % 应为 2
 % N_pri = null_rowspace_z(log_se3(T_xi3));
-
-tt = adjoint_m(T01)*zeta_r
-adjoint_m(exp_se3(tt))
-[exp_so3(tt(1:3)) zeros(3,3);exp_so3(tt(4:6)) exp_so3(tt(1:3))]

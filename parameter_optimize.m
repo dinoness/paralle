@@ -17,7 +17,7 @@ r1 = paras(6)*unit_para;  % 100
 r2 = paras(7)*unit_para;  % 80
 h = paras(8)*unit_para;  % 10
 
-limb_dir = [pi/2; 7*pi/6; -pi/6; pi/6; 5*pi/6];
+limb_dir = [pi/2; 7*pi/6; -pi/6; pi/2-deg2rad(45); pi/2+deg2rad(45)];
 B1 = [R1*cos(limb_dir(1)); R1*sin(limb_dir(1)); 0];
 B2 = [R1*cos(limb_dir(2)); R1*sin(limb_dir(2)); 0];
 B3 = [R1*cos(limb_dir(3)); R1*sin(limb_dir(3)); 0];
@@ -38,7 +38,7 @@ P = zeros(3, 5);    % 末端点坐标
 % 局部指数基公式
 zeta_r = [0;0;1;0;0;0];  % 旋转基底，在z轴为运动方向的前提下
 zeta_p = [0;0;0;0;0;1];  % 平移基底
-Pos_ref_seq = [0*unit_para;0*unit_para;-600*unit_para;0;0];  % 角度单位是°
+Pos_ref_seq = [0*unit_para;0*unit_para;-740*unit_para;0;0];  % 角度单位是°
 T_ref = pos2trans(Pos_ref_seq(:, 1), B);
 l0 = 600;
 l0_seq = [l0;l0;l0;l0;l0];
@@ -61,7 +61,7 @@ data_plot = zeros(3, l_seq_x*l_seq_y);
 
 for ix = 1 : l_seq_x
     for iy = 1 : l_seq_y
-        Pos_ref = [seq_x(ix); seq_y(iy); -600*unit_para;0;0];
+        Pos_ref = [seq_x(ix); seq_y(iy); -750*unit_para;0;0];
         T_ref = pos2trans(Pos_ref, B);
 
         joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
