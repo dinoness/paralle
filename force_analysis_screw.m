@@ -37,6 +37,7 @@ P = zeros(3, 5);    % 末端点坐标
 % 局部指数基公式
 zeta_r = [0;0;1;0;0;0];  % 旋转基底，在z轴为运动方向的前提下
 zeta_p = [0;0;0;0;0;1];  % 平移基底
+% Pos_ref_seq = [20*unit_para;-50*unit_para;-650*unit_para;5;10];
 Pos_ref_seq = [0*unit_para;0*unit_para;-650*unit_para;0;0];  % line=5 colum=n  角度的单位是° **一列为一组**
 T_ref = pos2trans(Pos_ref_seq(:, 1), B);
 
@@ -63,6 +64,7 @@ ST = zeros(6, 5);  % 传递力旋量
 SC = zeros(6, 1);  % 约束力旋量
 SI = zeros(6, 5);  % 输入运动旋量
 SO = zeros(6, 5);  % 输出运动旋量
+D_SO = zeros(6, 1);  % 输出受限运动旋量
 
 % SPR
 U1 = zeros(6, 6);  % 运动副旋量
@@ -93,7 +95,11 @@ U(:, :, 1) = U1;
 Omega = [zeros(3,3) eye(3); eye(3) zeros(3,3)];
 SI(:, 1) = U1(:, 4);
 SC(:, 1) = null(U1(:, 1:5)' * Omega);
+WA1 = Omega * U1(:, 1:5) / (U1(:, 1:5)' * U1(:, 1:5));  % 驱动力旋量空间
+TR1 = null(WA1' * Omega);  % 受限运动旋量空间
 ST(:, 1) = [U1(4:6,4); cross(B1, U1(4:6,4))];  % 纯力，以基座标原点为参考点
+% ST(:, 1) = WA1(:, 4);
+
 
 % UPS
 T2 = zeros(4,4,7);
@@ -128,7 +134,7 @@ for i_limb = 2 : 5
 
 end
 
-%% 计算输出运动旋量 SO
+%% 计算输出运动旋量 SO，与受限运动旋量D_SO
 for i = 1 : 5
     idx = [1:i-1, i+1:5];
     W = [SC, ST(:, idx)];  % 约束力 + 除第i个外的传递力
@@ -138,18 +144,30 @@ for i = 1 : 5
     end
 end
 
+D_SO(:, 1) = null(ST' * Omega);
+
+
 %% ITI OTI
 lambda = zeros(5, 1);
 eta = zeros(5, 1);
 for i = 1: 5
     % ITI
-    lambda(i) = abs(ST(:, i)' * Omega * SI(:, i)) / screw_apparent_power(ST(:, i), SI(:, i), 'p_cstr', P(:, i));
-    
+    % lambda(i) = abs(ST(:, i)' * Omega * SI(:, i)) / screw_apparent_power(ST(:, i), SI(:, i), 'p_cstr', P(:, i));  % 分子没有归一化
+    lambda(i) = screw_efficiency(ST(:, i), SI(:, i), 'p_cstr', P(:, i));
     % OTI
-    eta(i) = abs(ST(:, i)' * Omega * SO(:, i)) / screw_apparent_power(ST(:, i), SO(:, i), 'p_cstr', P(:, i));
+    % eta(i) = abs(ST(:, i)' * Omega * SO(:, i)) / screw_apparent_power(ST(:, i), SO(:, i), 'p_cstr', P(:, i));  % 分子没有归一化
+    eta(i) = screw_efficiency(ST(:, i), SO(:, i), 'p_cstr', P(:, i));
     
 end
 
 ITI = min(lambda);
 OTI = min(eta);
-[~,~,~, info] = screw_apparent_power(ST(:, 2), SO(:, 2), 'p_cstr', P(:, i));
+
+%% ICI OCI
+zeta = screw_efficiency(SC(:, 1), TR1, 'p_cstr', B(:, 1));
+kappa = screw_efficiency(SC(:, 1), D_SO(:, 1), 'p_cstr', B(:, 1));
+
+
+
+
+[~,~,~, info] = screw_efficiency(SC(:, 1), D_SO(:, 1), 'p_cstr', B(:, 1));
