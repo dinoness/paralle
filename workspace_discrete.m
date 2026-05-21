@@ -84,7 +84,7 @@ ball_vector = zeros(3, 5);
 ball_vector_world = zeros(3, 5);
 
 static_joint_dir_angle_deg = [ 0  0  0  0  0;
-                              -90  30 150 -150 -30];
+                              -90  30 150 -135 -45];
 static_joint_dir_angle = static_joint_dir_angle_deg / 180 * pi;
 static_joint_vector = zeros(3, 5);
 
@@ -237,7 +237,7 @@ for i = 1 : n
     end
 end
 for i = 1 : n
-    if work_space_down(3, i) == -740
+    if work_space_down(3, i) == -850
         plot(work_space_down(1,i), work_space_down(2,i),'*')
         hold on
     end
