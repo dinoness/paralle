@@ -1,61 +1,36 @@
 % 指定结构误差参数，查看位姿变化
 clear
-
 flag_plot = 1;
 
-addpath(genpath('./lib'));
-%--------parameter3--------
+path_add();
+basic_paras = basic_read('parameters.xlsx');
+l_max = basic_paras.l_max;
+l_min = basic_paras.l_min;
+R1 = basic_paras.R1;
+R2 = basic_paras.R2;
+H = basic_paras.H;
+r1 = basic_paras.r1;
+r2 = basic_paras.r2;
+h = basic_paras.h;
+L_tool = basic_paras.L_tool;
+limb_dir = basic_paras.limb_dir;
+B = basic_paras.B;
+P_m = basic_paras.P_m;
+l0_seq = basic_paras.l0_seq;
+
+
 unit_para = 0.001;  % 0.001表示m，1表示mm
-
-T = readtable('parameters.xlsx', 'Range', 'A2:B13');
-paras = table2array(T(:, 2));
-l_max = paras(1)*unit_para;
-l_min = paras(2)*unit_para;  % 670
-R1 = paras(3)*unit_para;  % 550
-R2 = paras(4)*unit_para;  % 500
-H = paras(5)*unit_para;  % 0
-r1 = paras(6)*unit_para;  % 100
-r2 = paras(7)*unit_para;  % 80
-h = paras(8)*unit_para;  % 10
-% L_tool = paras(12)*unit_para;
-L_tool = 0;
-
-% limb_dir = [  pi/2,    pi/2;
-%             7*pi/6,  7*pi/6; 
-%              -pi/6,   -pi/6; 
-%             pi/2-deg2rad(45), pi/2-deg2rad(45);
-%             pi/2+deg2rad(45), pi/2+deg2rad(45)];
-limb_dir = [  pi/2,    pi/2;
-            7*pi/6,  7*pi/6; 
-             -pi/6,   -pi/6; 
-            pi/2-deg2rad(60), pi/2-deg2rad(45);
-            pi/2+deg2rad(60), pi/2+deg2rad(45)];
-
-B1 = [R1*cos(limb_dir(1)); R1*sin(limb_dir(1)); 0];
-B2 = [R1*cos(limb_dir(2)); R1*sin(limb_dir(2)); 0];
-B3 = [R1*cos(limb_dir(3)); R1*sin(limb_dir(3)); 0];
-B4 = [R2*cos(limb_dir(4)); R2*sin(limb_dir(4)); H];
-B5 = [R2*cos(limb_dir(5)); R2*sin(limb_dir(5)); H];
-B = [B1 B2 B3 B4 B5];
-
-% move plant parameter
-P1_m = [r1*cos(limb_dir(1)); r1*sin(limb_dir(1)); L_tool];
-P2_m = [r1*cos(limb_dir(2)); r1*sin(limb_dir(2)); L_tool];
-P3_m = [r1*cos(limb_dir(3)); r1*sin(limb_dir(3)); L_tool];
-P4_m = [r2*cos(limb_dir(4)); r2*sin(limb_dir(4)); L_tool + h];
-P5_m = [r2*cos(limb_dir(5)); r2*sin(limb_dir(5)); L_tool + h];
-P_m = [P1_m P2_m P3_m P4_m P5_m];
-P_v = zeros(3, 5);  % 只变换了方向，没变换起点
-P = zeros(3, 5);    % 末端点坐标
-
 % -----end-parameter3------
 
-Pos_ref_seq = [0*unit_para;0*unit_para;-775*unit_para;0;0];  % line=5 colum=n  角度的单位是° **一列为一组**
+
+
+P_v = zeros(3, 5);  % 只变换了方向，没变换起点
+P = zeros(3, 5);    % 末端点坐标
+Pos_ref_seq = [0*unit_para;0*unit_para;-800*unit_para;0;0];  % line=5 colum=n  角度的单位是° **一列为一组**
 T_ref = pos2trans(Pos_ref_seq(:, 1), B);
-l0 = 600*unit_para;
-l0_seq = [l0;l0;l0;l0;l0];
 joint_u_angle_tilt = 155 / 180 * pi;
-[p_seq, ~, info] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+p_seq = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+
 joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
 
 
