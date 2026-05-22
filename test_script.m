@@ -110,64 +110,64 @@ addpath(genpath('./lib'));
 % end
 
 %% 测试雅克比矩阵求法
-zeta_r = [0;0;1;0;0;0];  % 旋转基底，在z轴为运动方向的前提下
-zeta_p = [0;0;0;0;0;1];  % 平移基底
+% zeta_r = [0;0;1;0;0;0];  % 旋转基底，在z轴为运动方向的前提下
+% zeta_p = [0;0;0;0;0;1];  % 平移基底
 
-L1 = 10;
-L2 = 5;
-q1 = pi/6;
-q2 = pi/4;
+% L1 = 10;
+% L2 = 5;
+% q1 = pi/6;
+% q2 = pi/4;
 
-T0 = [eye(4)];
-T1 = [eye(3) [L1;0;0]; [0 0 0 1]];
-Tp = [eye(3) [L2;0;0]; [0 0 0 1]];
-Te0 = T0*T1*Tp;
+% T0 = [eye(4)];
+% T1 = [eye(3) [L1;0;0]; [0 0 0 1]];
+% Tp = [eye(3) [L2;0;0]; [0 0 0 1]];
+% Te0 = T0*T1*Tp;
 
-T1zeta = exp_se3(zeta_r * q1);
-T2zeta = exp_se3(zeta_r * q2);
+% T1zeta = exp_se3(zeta_r * q1);
+% T2zeta = exp_se3(zeta_r * q2);
 
-Tx1 = T0 * T1zeta / T0;
-Tx2 = (T0*T1) * T2zeta / (T0*T1);
+% Tx1 = T0 * T1zeta / T0;
+% Tx2 = (T0*T1) * T2zeta / (T0*T1);
 
-xi1 = log_se3(T0 * exp_se3(zeta_r) / T0);
-xi2 = log_se3((T0*T1) * exp_se3(zeta_r) / (T0*T1));
-Te = Tx1 * Tx2 * Te0;
+% xi1 = log_se3(T0 * exp_se3(zeta_r) / T0);
+% xi2 = log_se3((T0*T1) * exp_se3(zeta_r) / (T0*T1));
+% Te = Tx1 * Tx2 * Te0;
 
-J1 = xi1;
-J2 = adjoint(Tx1,xi2);
-disp("全局法")
-disp([J1 J2])
-% 全局法，旋量本身要零位的，而算伴随矩阵要带上现有位姿的
+% J1 = xi1;
+% J2 = adjoint(Tx1,xi2);
+% disp("全局法")
+% disp([J1 J2])
+% % 全局法，旋量本身要零位的，而算伴随矩阵要带上现有位姿的
 
-TJ1 = T0 * exp_se3(zeta_r) / T0;
-j1 = log_se3(TJ1);
+% TJ1 = T0 * exp_se3(zeta_r) / T0;
+% j1 = log_se3(TJ1);
 
 
-TJ2 = (T0*T1zeta*T1) * exp_se3(zeta_r) / (T0*T1zeta*T1);
-j2 = log_se3(TJ2);
+% TJ2 = (T0*T1zeta*T1) * exp_se3(zeta_r) / (T0*T1zeta*T1);
+% j2 = log_se3(TJ2);
 
-disp("局部法")
-disp([j1 j2])
+% disp("局部法")
+% disp([j1 j2])
 
-Jb1 = adjoint(trans_inv(Te), J1);
-Jb2 = adjoint(trans_inv(Te), J2);
+% Jb1 = adjoint(trans_inv(Te), J1);
+% Jb2 = adjoint(trans_inv(Te), J2);
 
-disp("body jacobian")
-disp([Jb1 Jb2])
+% disp("body jacobian")
+% disp([Jb1 Jb2])
 
-tol = 1e-5;
-q1d = q1 + tol;
-q2d = q2;
-% 扰动正解
-T1zetad = exp_se3(zeta_r * q1d);
-T2zetad = exp_se3(zeta_r * q2d);
-Tx1d = T0 * T1zetad / T0;
-Tx2d = (T0*T1) * T2zetad / (T0*T1);
-Ted = T0*T1zetad*T1*T2zetad*Tp;
-% Ted = Tx1d * Tx2d * Te0;
-% 求解扰动量
-err = log_se3(Ted/Te) / tol
-err2 = log_se3(Te\Ted) / tol
+% tol = 1e-5;
+% q1d = q1 + tol;
+% q2d = q2;
+% % 扰动正解
+% T1zetad = exp_se3(zeta_r * q1d);
+% T2zetad = exp_se3(zeta_r * q2d);
+% Tx1d = T0 * T1zetad / T0;
+% Tx2d = (T0*T1) * T2zetad / (T0*T1);
+% Ted = T0*T1zetad*T1*T2zetad*Tp;
+% % Ted = Tx1d * Tx2d * Te0;
+% % 求解扰动量
+% err = log_se3(Ted/Te) / tol
+% err2 = log_se3(Te\Ted) / tol
 
 
 function j = adjoint(T, xi)
@@ -298,3 +298,19 @@ end
 %          w(3), 0, -w(1);
 %          -w(2), w(1), 0];
 % end
+
+Omega = [zeros(3,3) eye(3); eye(3) zeros(3,3)];
+gamma = deg2rad(120);
+TP = [1 0 0 0 0 0;
+      0 1 0 0 0 0;
+      0 0 0 cos(gamma) 0 sin(gamma)]';
+WA = Omega * TP / (TP' * TP);
+WC = null(TP' * Omega);
+% TR = null(WA' * Omega);
+TR = [0 0 0 sin(gamma) 0 -cos(gamma);
+      0 0 0 0 -1 0;
+      0 0 1 0 0 0]';
+zeta = zeros(1,3);
+for i = 1 : 3
+    zeta(i) = abs(WC(:, i)' * Omega * TR(:, i)) / screw_apparent_power(WC(:, i), TR(:, i),'p_cstr',zeros(3,1));
+end

@@ -1,8 +1,13 @@
-function [p_seq] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt)
+function [p_seq, xi_seq] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt)
 % 给定几何参数，生成旋量序列
 p_seq = zeros(6, 34); % 1-6,7-13,14-20,21-27,28-34
-
+xi_seq = zeros(6, 34);  % 关节零位全局坐标
 o13 = zeros(1, 3);
+
+% 局部指数基公式
+zeta_r = [0;0;1;0;0;0];  % 旋转基底，在z轴为运动方向的前提下
+zeta_p = [0;0;0;0;0;1];  % 平移基底
+
 
 % SPR支链
 % 固定坐标到关节1的转移矩阵
@@ -56,6 +61,13 @@ p_seq(:, 3) = log_se3(T1_3);
 p_seq(:, 4) = log_se3(T1_4);
 p_seq(:, 5) = log_se3(T1_5);
 p_seq(:, 6) = log_se3(T1_p);
+
+xi_seq(:, 1) = adjoint_m(T1_1) * zeta_r;
+xi_seq(:, 2) = adjoint_m(T1_1*T1_2) * zeta_r;
+xi_seq(:, 3) = adjoint_m(T1_1*T1_2*T1_3) * zeta_r;
+xi_seq(:, 4) = adjoint_m(T1_1*T1_2*T1_3*T1_4) * zeta_p;
+xi_seq(:, 5) = adjoint_m(T1_1*T1_2*T1_3*T1_4*T1_5) * zeta_r;
+% xi_seq(:, 6) = adjoint_m(T1_1*T1_2*T1_3*T1_4*T1_5*T1_p);
 
 % UPS
 for i_limb = 2 : 5
@@ -133,6 +145,14 @@ for i_limb = 2 : 5
     p_seq(:, 7*(i_limb-1) + 4) = log_se3(T45);
     p_seq(:, 7*(i_limb-1) + 5) = log_se3(T56);
     p_seq(:, 7*(i_limb-1) + 6) = log_se3(T_p);
+
+    xi_seq(:, 7*(i_limb-1) + 0) = adjoint_m(T01) * zeta_r;
+    xi_seq(:, 7*(i_limb-1) + 1) = adjoint_m(T01*T12) * zeta_r;
+    xi_seq(:, 7*(i_limb-1) + 2) = adjoint_m(T01*T12*T23) * zeta_p;
+    xi_seq(:, 7*(i_limb-1) + 3) = adjoint_m(T01*T12*T23*T34) * zeta_r;
+    xi_seq(:, 7*(i_limb-1) + 4) = adjoint_m(T01*T12*T23*T34*T45) * zeta_r;
+    xi_seq(:, 7*(i_limb-1) + 5) = adjoint_m(T01*T12*T23*T34*T45*T56) * zeta_r;
+    % xi_seq(:, 7*(i_limb-1) + 6) = adjoint_m(T_p);
 
 end
 

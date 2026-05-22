@@ -6,8 +6,8 @@ function T = pos2trans(pos, B)
     theta = pos(5) / 180 * pi;
 
     z_axis = [sin(theta)*cos(phi);
-         sin(theta)*sin(phi);
-         cos(theta)];
+            sin(theta)*sin(phi);
+            cos(theta)];
     ObB1 = B(:, 1) - t;
     x_axis = cross(ObB1, z_axis) / norm(cross(ObB1, z_axis));
     y_axis = cross(z_axis, x_axis);

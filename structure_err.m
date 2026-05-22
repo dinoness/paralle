@@ -7,7 +7,7 @@ addpath(genpath('./lib'));
 %--------parameter3--------
 unit_para = 0.001;  % 0.001表示m，1表示mm
 
-T = readtable('parameters.xlsx', 'Range', 'A2:B12');
+T = readtable('parameters.xlsx', 'Range', 'A2:B13');
 paras = table2array(T(:, 2));
 l_max = paras(1)*unit_para;
 l_min = paras(2)*unit_para;  % 670
@@ -17,28 +17,30 @@ H = paras(5)*unit_para;  % 0
 r1 = paras(6)*unit_para;  % 100
 r2 = paras(7)*unit_para;  % 80
 h = paras(8)*unit_para;  % 10
+% L_tool = paras(12)*unit_para;
+L_tool = 0;
 
-limb_dir = [pi/2; 7*pi/6; -pi/6; pi/6; 5*pi/6];
-B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
-B2 = [R1*cos(7*pi/6); R1*sin(7*pi/6); 0];
-B3 = [R1*cos(-pi/6);  R1*sin(-pi/6);  0];
-B4 = [R2*cos(pi/6);   R2*sin(pi/6);   H];
-B5 = [R2*cos(5*pi/6); R2*sin(5*pi/6); H];
+limb_dir = [pi/2; 7*pi/6; -pi/6; pi/2-deg2rad(45); pi/2+deg2rad(45)];
+B1 = [R1*cos(limb_dir(1)); R1*sin(limb_dir(1)); 0];
+B2 = [R1*cos(limb_dir(2)); R1*sin(limb_dir(2)); 0];
+B3 = [R1*cos(limb_dir(3)); R1*sin(limb_dir(3)); 0];
+B4 = [R2*cos(limb_dir(4)); R2*sin(limb_dir(4)); H];
+B5 = [R2*cos(limb_dir(5)); R2*sin(limb_dir(5)); H];
 B = [B1 B2 B3 B4 B5];
 
 % move plant parameter
-P1_m = [r1*cos(pi/2);   r1*sin(pi/2);   0];
-P2_m = [r1*cos(7*pi/6); r1*sin(7*pi/6); 0];
-P3_m = [r1*cos(-pi/6);  r1*sin(-pi/6);  0];
-P4_m = [r2*cos(pi/6);   r2*sin(pi/6);   h];
-P5_m = [r2*cos(5*pi/6); r2*sin(5*pi/6); h];
+P1_m = [r1*cos(limb_dir(1)); r1*sin(limb_dir(1)); L_tool];
+P2_m = [r1*cos(limb_dir(2)); r1*sin(limb_dir(2)); L_tool];
+P3_m = [r1*cos(limb_dir(3)); r1*sin(limb_dir(3)); L_tool];
+P4_m = [r2*cos(limb_dir(4)); r2*sin(limb_dir(4)); L_tool + h];
+P5_m = [r2*cos(limb_dir(5)); r2*sin(limb_dir(5)); L_tool + h];
 P_m = [P1_m P2_m P3_m P4_m P5_m];
 P_v = zeros(3, 5);  % 只变换了方向，没变换起点
 P = zeros(3, 5);    % 末端点坐标
 
 % -----end-parameter3------
 
-Pos_ref_seq = [0*unit_para;0*unit_para;-600*unit_para;0;0];  % line=5 colum=n  角度的单位是° **一列为一组**
+Pos_ref_seq = [0*unit_para;0*unit_para;-775*unit_para;0;0];  % line=5 colum=n  角度的单位是° **一列为一组**
 T_ref = pos2trans(Pos_ref_seq(:, 1), B);
 l0 = 600*unit_para;
 l0_seq = [l0;l0;l0;l0;l0];
@@ -48,18 +50,42 @@ p_seq = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
 
 
-B_delta = B;
-% B_delta(3,3) = B_delta(3,3) - 0.1;
-B_delta(3,2) = B_delta(3,2) + 0.010;
-B_delta(2,2) = B_delta(2,2) + 0.010;
-B_delta(3,1) = B_delta(3,1) - 0.010;
-B_delta(3,1) = B_delta(3,1) + 0.010;
+
+% B_delta(3,3) = B_delta(3,3) - 0.01;
+A = [-1 0 0;0 0 1;0 1 0];
+% 施加5Nm扭矩，钢架形变
+B_delta = A \ [0.15531 0.96248  0.95566  0.41285 0.41441;
+               -2.8757e-002 0.66129 -0.68776 -0.52018 0.51169;
+               -2.6366e-002 0.47564  -0.46752  -0.42598 0.42688]*1e-3;
+
+% 施加5Nm扭矩，钢架+型钢强化形变
+% B_delta = A \ [1.8657e-002 0.12832  0.13184  5.3306e-002 5.2661e-002;
+%                -1.1315e-004 0.17818 -0.20102 -6.8149e-002 6.145e-002;
+%                2.6872e-003 6.0572e-002  -5.822e-002  -4.9764e-002 5.2126e-002]*1e-3;
+
+% v3大理石架施加5Nm扭矩+30N力，形变量5.06μm
+% B_delta = A \ [-5.8614e-005 6.9772e-004  3.9442e-005 -1.891e-004  -3.3246e-005;
+%                -5.949e-004 -1.041e-003 -8.5822e-004 -1.0678e-003 -9.0932e-004;
+%                 -1.3539e-004 -2.1966e-004  -8.6195e-004 -3.7212e-004  3.0401e-004]*1e-3;
 
 
+% B_delta = A \ [-1.5098e-005 -4.3266e-004  4.9412e-004  1.0722e-005 -5.5064e-005;
+%                -5.7798e-005 -3.1701e-005 -5.2699e-005 -7.1807e-006 -2.9126e-005;
+%                 4.2404e-005 -4.1589e-005  4.8952e-005  9.2001e-005 -1.0792e-005]*1e-3;
+% B_delta = A \ [-1.4214e-005 -4.6059e-004  5.4223e-004  2.1144e-005 -6.6548e-005;
+%                -5.2966e-005 -3.5028e-005 -5.8474e-005 -5.3564e-006 -3.0587e-005;
+%                 4.904e-005 -4.4051e-005  5.8018e-005  1.0583e-004 -9.1656e-006]*1e-3;
+B_delta = B + B_delta;
+% B_delta(3,2) = B_delta(3,2) + 0.015/1000;
+% B_delta(2,2) = B_delta(2,2) + 0.015/1000;
+% B_delta(3,1) = B_delta(3,1) - 0.015/1000;
 
 p_seq2 = parameterize(limb_dir, B_delta, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
-T_delta = keni_sol_forward(joint_q0, p_seq2, 1e-8)
+T_delta = keni_sol_forward(joint_q0, p_seq2, 1e-8);
+format long
+err = T_ref\T_delta;
+disp(norm(err(1:3, 4)))
 
 
 if flag_plot == 1

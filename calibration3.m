@@ -346,13 +346,16 @@ T_xi6 = (T01*T12*T23*T34*T45*T56) * T_zeta6 / (T01*T12*T23*T34*T45*T56);
 % q5 = -0.6435
 
 l0_seq = [l0;l0;l0;l0;l0];
-p_seq = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+limb_dir_move = [pi/2; 7*pi/6; -pi/6; pi/2-deg2rad(50); pi/2+deg2rad(50)];
+p_seq = parameterize(limb_dir, limb_dir_move, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
 joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
+T2 = keni_sol_forward_once(joint_q0, p_seq);
 
 B_delta = B;
 B_delta(3,5) = B_delta(3,5) + 2;
-p_seq2 = parameterize(limb_dir, B_delta, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+
+p_seq2 = parameterize(limb_dir, limb_dir_move, B_delta, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
 %% Calibration error model
 % J = jacobian_space(joint_q0, p_seq);  % 6*6 - 5
@@ -428,19 +431,18 @@ end
 
 
 
-% 转动关节：绕 x 轴转动
-xi_rev = [1;0;0;0;0;0];
-[N_rev, R_rev, Q_rev] = null_rowspace_z(log_se3(T_xi4));
-disp('转动关节零空间维数:'); size(N_rev,2)   % 应为 2
-disp('转动关节行空间维数:'); size(R_rev,2)   % 应为 4
-% 验证正交性
-disp('N_rev 的列是否标准正交:'); norm(N_rev'*N_rev - eye(2))  % 应接近0
-disp('R_rev 的列是否标准正交:'); norm(R_rev'*R_rev - eye(4))  % 应接近0
+% % 转动关节：绕 x 轴转动
+% xi_rev = [1;0;0;0;0;0];
+% [N_rev, R_rev, Q_rev] = null_rowspace_z(log_se3(T_xi4));
+% disp('转动关节零空间维数:'); size(N_rev,2)   % 应为 2
+% disp('转动关节行空间维数:'); size(R_rev,2)   % 应为 4
+% % 验证正交性
+% disp('N_rev 的列是否标准正交:'); norm(N_rev'*N_rev - eye(2))  % 应接近0
+% disp('R_rev 的列是否标准正交:'); norm(R_rev'*R_rev - eye(4))  % 应接近0
 
-% 移动关节：沿 z 轴移动
-xi_pri = [0;0;0;0;0;1];
-% [N_pri, R_pri, Q_pri] = null_rowspace_z(log_se3(T_xi3));
-% disp('移动关节零空间维数:'); size(N_pri,2)   % 应为 4
-% disp('移动关节行空间维数:'); size(R_pri,2)   % 应为 2
-N_pri = null_rowspace_z(log_se3(T_xi3))
-
+% % 移动关节：沿 z 轴移动
+% xi_pri = [0;0;0;0;0;1];
+% % [N_pri, R_pri, Q_pri] = null_rowspace_z(log_se3(T_xi3));
+% % disp('移动关节零空间维数:'); size(N_pri,2)   % 应为 4
+% % disp('移动关节行空间维数:'); size(R_pri,2)   % 应为 2
+% N_pri = null_rowspace_z(log_se3(T_xi3));
