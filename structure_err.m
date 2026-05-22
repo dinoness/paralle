@@ -20,7 +20,17 @@ h = paras(8)*unit_para;  % 10
 % L_tool = paras(12)*unit_para;
 L_tool = 0;
 
-limb_dir = [pi/2; 7*pi/6; -pi/6; pi/2-deg2rad(45); pi/2+deg2rad(45)];
+% limb_dir = [  pi/2,    pi/2;
+%             7*pi/6,  7*pi/6; 
+%              -pi/6,   -pi/6; 
+%             pi/2-deg2rad(45), pi/2-deg2rad(45);
+%             pi/2+deg2rad(45), pi/2+deg2rad(45)];
+limb_dir = [  pi/2,    pi/2;
+            7*pi/6,  7*pi/6; 
+             -pi/6,   -pi/6; 
+            pi/2-deg2rad(60), pi/2-deg2rad(45);
+            pi/2+deg2rad(60), pi/2+deg2rad(45)];
+
 B1 = [R1*cos(limb_dir(1)); R1*sin(limb_dir(1)); 0];
 B2 = [R1*cos(limb_dir(2)); R1*sin(limb_dir(2)); 0];
 B3 = [R1*cos(limb_dir(3)); R1*sin(limb_dir(3)); 0];
@@ -45,8 +55,7 @@ T_ref = pos2trans(Pos_ref_seq(:, 1), B);
 l0 = 600*unit_para;
 l0_seq = [l0;l0;l0;l0;l0];
 joint_u_angle_tilt = 155 / 180 * pi;
-p_seq = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
-
+[p_seq, ~, info] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
 
 
@@ -54,9 +63,9 @@ joint_q0 = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
 % B_delta(3,3) = B_delta(3,3) - 0.01;
 A = [-1 0 0;0 0 1;0 1 0];
 % 施加5Nm扭矩，钢架形变
-B_delta = A \ [0.15531 0.96248  0.95566  0.41285 0.41441;
-               -2.8757e-002 0.66129 -0.68776 -0.52018 0.51169;
-               -2.6366e-002 0.47564  -0.46752  -0.42598 0.42688]*1e-3;
+% B_delta = A \ [0.15531 0.96248  0.95566  0.41285 0.41441;
+%                -2.8757e-002 0.66129 -0.68776 -0.52018 0.51169;
+%                -2.6366e-002 0.47564  -0.46752  -0.42598 0.42688]*1e-3;
 
 % 施加5Nm扭矩，钢架+型钢强化形变
 % B_delta = A \ [1.8657e-002 0.12832  0.13184  5.3306e-002 5.2661e-002;
@@ -75,6 +84,7 @@ B_delta = A \ [0.15531 0.96248  0.95566  0.41285 0.41441;
 % B_delta = A \ [-1.4214e-005 -4.6059e-004  5.4223e-004  2.1144e-005 -6.6548e-005;
 %                -5.2966e-005 -3.5028e-005 -5.8474e-005 -5.3564e-006 -3.0587e-005;
 %                 4.904e-005 -4.4051e-005  5.8018e-005  1.0583e-004 -9.1656e-006]*1e-3;
+B_delta = zeros(3, 5);
 B_delta = B + B_delta;
 % B_delta(3,2) = B_delta(3,2) + 0.015/1000;
 % B_delta(2,2) = B_delta(2,2) + 0.015/1000;

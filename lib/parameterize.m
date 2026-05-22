@@ -1,8 +1,19 @@
-function [p_seq, xi_seq] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt)
+function [p_seq, xi_seq, info] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt)
 % 给定几何参数，生成旋量序列
 p_seq = zeros(6, 34); % 1-6,7-13,14-20,21-27,28-34
 xi_seq = zeros(6, 34);  % 关节零位全局坐标
 o13 = zeros(1, 3);
+
+% 1代表下平台，2代表上平台
+base_dir_index = 1;
+if size(limb_dir, 2) == 1
+    move_dir_index = 1;
+    dif_limb_dir = zeros(5, 1);
+else
+    move_dir_index = 2;
+    dif_limb_dir = limb_dir(:, base_dir_index) - limb_dir(:, move_dir_index);
+end
+
 
 % 局部指数基公式
 zeta_r = [0;0;1;0;0;0];  % 旋转基底，在z轴为运动方向的前提下
@@ -80,11 +91,11 @@ for i_limb = 2 : 5
     end
 
     % 固定坐标到关节1的转移矩阵
-    joint_1_z = [sin(joint_u_angle_tilt) * cos(limb_dir(i_limb));
-                sin(joint_u_angle_tilt) * sin(limb_dir(i_limb));
+    joint_1_z = [sin(joint_u_angle_tilt) * cos(limb_dir(i_limb, base_dir_index));
+                sin(joint_u_angle_tilt) * sin(limb_dir(i_limb, base_dir_index));
                 cos(joint_u_angle_tilt)];
-    joint_1_x = [cos(limb_dir(i_limb) - pi/2);
-                sin(limb_dir(i_limb) - pi/2);
+    joint_1_x = [cos(limb_dir(i_limb, base_dir_index) - pi/2);
+                sin(limb_dir(i_limb, base_dir_index) - pi/2);
                 0];
     joint_1_y = cross(joint_1_z, joint_1_x);
     R01 = [joint_1_x joint_1_y joint_1_z];
@@ -114,10 +125,10 @@ for i_limb = 2 : 5
     t34 = [0;0;l0_seq(i_limb)];
     T34 = [R34 t34;o13 1];
 
-    % 关节4到关节5的转移矩阵(绕z)
-    joint_5_z = [-1;0;0];
+    % 关节4到关节5的转移矩阵(绕z)(考虑了上下平台之间的关节排布角度的差别)
+    joint_5_z = [cos(pi + dif_limb_dir(i_limb)); sin(pi + dif_limb_dir(i_limb)); 0];
     joint_5_x = [0;0;1];
-    joint_5_y = [0;1;0];
+    joint_5_y = [cos(pi/2+dif_limb_dir(i_limb)); sin(pi/2+dif_limb_dir(i_limb)); 0];
     R45 = [joint_5_x joint_5_y joint_5_z];
     t45 = zeros(3,1);
     T45 = [R45 t45;o13 1];
@@ -132,8 +143,8 @@ for i_limb = 2 : 5
 
     % 关节6到动平台中心转移矩阵(绕z)
     p_z = [-1;0;0];
-    p_x = [0;sin(pi-limb_dir(i_limb));cos(pi-limb_dir(i_limb))];
-    p_y = [0;sin(3/2*pi-limb_dir(i_limb));cos(3/2*pi-limb_dir(i_limb))];
+    p_x = [0;sin(pi-limb_dir(i_limb, move_dir_index));cos(pi-limb_dir(i_limb, move_dir_index))];
+    p_y = [0;sin(3/2*pi-limb_dir(i_limb, move_dir_index));cos(3/2*pi-limb_dir(i_limb, move_dir_index))];
     R_p = [p_x p_y p_z];
     t_p = [P_m(3,i_limb);0;r];
     T_p = [R_p t_p;o13 1];
@@ -156,5 +167,6 @@ for i_limb = 2 : 5
 
 end
 
+info.dif_limb_dir = dif_limb_dir;
 
 end
