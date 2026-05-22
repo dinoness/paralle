@@ -8,20 +8,19 @@ end
 T_actual = zeros(4, 4);
 tol = 1e-5;  % 矩阵移项
 alpha = 0.5;  % 迭代步长因子
-
+mu = 1e-5;  % 初始阻尼因子
 
 joint_q_ = joint_q;
 T0 = keni_sol_forward_once(joint_q_, p_seq);
 err = err_cal(T0);
 
 J_q = zeros(6,6,5);  % 初始雅可比，其中SPR支链第六列全为0
-loop_max = 50;
+loop_max = 100;
 loop = 0;
 J_passive = zeros(6,5,5);  % 去除主动关节后的雅可比矩阵
 joint_passive = zeros(24, 1);  % 所有被动关节排列成列向量，也删除了SPR关节的多出的0
 
 err_list = zeros(loop_max,1);
-
 while norm(err) > err_max  % sum(abs(err))
     % update joint_q
     % 计算雅可比
@@ -48,50 +47,106 @@ while norm(err) > err_max  % sum(abs(err))
 
     % end
 
+    % J_all = [J_passive(:,1:4,1) -1*J_passive(:,:,2)          zeros(6,5)          zeros(6,5)          zeros(6,5);
+    %                  zeros(6,4)    J_passive(:,:,2) -1*J_passive(:,:,3)          zeros(6,5)          zeros(6,5);
+    %                  zeros(6,4)          zeros(6,5)    J_passive(:,:,3) -1*J_passive(:,:,4)          zeros(6,5);
+    %                  zeros(6,4)          zeros(6,5)          zeros(6,5)    J_passive(:,:,4) -1*J_passive(:,:,5)];
     J_all = [J_passive(:,1:4,1) -1*J_passive(:,:,2)          zeros(6,5)          zeros(6,5)          zeros(6,5);
-                     zeros(6,4)    J_passive(:,:,2) -1*J_passive(:,:,3)          zeros(6,5)          zeros(6,5);
-                     zeros(6,4)          zeros(6,5)    J_passive(:,:,3) -1*J_passive(:,:,4)          zeros(6,5);
-                     zeros(6,4)          zeros(6,5)          zeros(6,5)    J_passive(:,:,4) -1*J_passive(:,:,5)];
+             J_passive(:,1:4,1)          zeros(6,5) -1*J_passive(:,:,3)          zeros(6,5)          zeros(6,5);
+             J_passive(:,1:4,1)          zeros(6,5)          zeros(6,5) -1*J_passive(:,:,4)          zeros(6,5);
+             J_passive(:,1:4,1)          zeros(6,5)          zeros(6,5)          zeros(6,5) -1*J_passive(:,:,5)];
+    code_switch = 2;
+    % ===============AI==================
+    % 参考非线性最小二乘的方法
     
-    % joint_passive = joint_passive + alpha * pinv(J_all'*J_all) * J_all' * err;
-    joint_passive = joint_passive + alpha * ((J_all'*J_all + tol*eye(24)) \ (J_all' * err));
-    % joint_passive = joint_passive + alpha * (J_all'*J_all) \ J_all' * err;
-    % joint_passive = joint_passive + J_all \ err;
-    % disp("joint_passive");
-    % disp(joint_passive);
+    if code_switch == 1
+        delta_q = (J_all'*J_all + mu * eye(24)) \ (J_all' * err);
+        joint_passive_new = joint_passive + delta_q;
 
-    % disp("rank J_all'*J_all");
-    % disp(rank(J_all'*J_all));
+        % --- 试探性更新 ---
+        joint_q_new = joint_q_;
+        joint_q_new(1:3, 1) = joint_passive_new(1:3);
+        joint_q_new(5, 1) = joint_passive_new(4);
+        for i_limb = 2 : 5
+            joint_q_new(1:2, i_limb) = joint_passive_new(i_limb*5-5: i_limb*5-4);
+            joint_q_new(4:6, i_limb) = joint_passive_new(i_limb*5-3: i_limb*5-1);
+        end
+
+        T0_new = keni_sol_forward_once(joint_q_new, p_seq);
+        err_new = err_cal(T0_new);
+
+        % 判断是否接受该步
+        d_qk = (J_all'*err_new)' * delta_q + 0.5*delta_q'*(J_all'*J_all)*delta_q;
+        d_f = norm(err_new) - norm(err);
+        yita = d_f / d_qk;
+        if norm(err_new) < norm(err)
+            % 误差下降，接受该步，并减小阻尼
+            joint_passive = joint_passive_new;
+            joint_q_ = joint_q_new;
+            err = err_new;
+            if yita > 0.75
+                mu = mu / 10; % 减小阻尼，加快收敛速度
+            elseif yita < 0.25
+                mu = mu * 10;
+            end
+            loop = loop + 1;
+            err_list(loop) = norm(err);
+        else
+            % 误差上升，拒绝该步，增大阻尼以减小步长
+            mu = mu * 10;
+            % loop 不增加，直接进入下一次循环重新计算 delta_q
+            
+            % 防止死循环的安全机制
+            if mu > 1e5
+                warning('阻尼因子过大，可能陷入局部极小值');
+                break;
+            end
+        end
 
 
-    % 还原为矩阵模式
-    joint_q_(1:3, 1) = joint_passive(1:3);
-    joint_q_(5, 1) = joint_passive(4);
-    for i_limb = 2 : 5
-        joint_q_(1:2, i_limb) = joint_passive(i_limb*5-5: i_limb*5-4);
-        joint_q_(4:6, i_limb) = joint_passive(i_limb*5-3: i_limb*5-1);
-    end
-
-
-    T0 = keni_sol_forward_once(joint_q_, p_seq);
-    err = err_cal(T0);
-    
-
-    % 记录循环次数
-    if(loop < loop_max)
-        loop = loop + 1;
-        err_list(loop) = norm(err);  % sum(abs(err))
+    % ===============AI-END==================
     else
-        break;
-    end
+    % ===============MY CODE==================
+        % joint_passive = joint_passive + alpha * pinv(J_all'*J_all) * J_all' * err;
+        joint_passive = joint_passive + alpha * ((J_all'*J_all + tol*eye(24)) \ (J_all' * err));
+        % joint_passive = joint_passive + alpha * (J_all'*J_all) \ J_all' * err;
+        % joint_passive = joint_passive + J_all \ err;
+        % disp("joint_passive");
+        % disp(joint_passive);
+
+        % disp("rank J_all'*J_all");
+        % disp(rank(J_all'*J_all));
+
+
+        % 还原为矩阵模式
+        joint_q_(1:3, 1) = joint_passive(1:3);
+        joint_q_(5, 1) = joint_passive(4);
+        for i_limb = 2 : 5
+            joint_q_(1:2, i_limb) = joint_passive(i_limb*5-5: i_limb*5-4);
+            joint_q_(4:6, i_limb) = joint_passive(i_limb*5-3: i_limb*5-1);
+        end
+
+
+        T0 = keni_sol_forward_once(joint_q_, p_seq);
+        err = err_cal(T0);
+        
+
+        % 记录循环次数
+        if(loop < loop_max)
+            loop = loop + 1;
+            err_list(loop) = norm(err);  % sum(abs(err))
+        else
+            break;
+        end
 
     % fprintf("loop = %d, err = %.4f, rank(J_all'*J_all) = %d\n", loop, sum(abs(err)), rank(J_all'*J_all));
-    
+    % ===============MY CODE-END==================
+    end
     
 end
 
 % 输出误差曲线
-% plot(err_list(1:loop));
+plot(err_list(1:loop));
 if err_list(end) > 2
     disp(err_list(end));
     error("--- 运动学正解未收敛 ---");
@@ -103,13 +158,21 @@ end
 
 
 
+% function err = err_cal(T)
+%     err = zeros(24, 1);
+%     for i_limb = 1 : 4
+%         if rcond(T(:,:,i_limb)) < 1e-14
+%             % disp(T(:,:,i_limb));
+%         end
+%         err(6*(i_limb-1)+1 : 6*(i_limb-1)+6) = log_se3(T(:,:,i_limb+1)/T(:,:,i_limb));
+%     end
+% end
+
 function err = err_cal(T)
     err = zeros(24, 1);
-    for i_limb = 1 : 4
-        if rcond(T(:,:,i_limb)) < 1e-14
-            % disp(T(:,:,i_limb));
-        end
-        err(6*(i_limb-1)+1 : 6*(i_limb-1)+6) = log_se3(T(:,:,i_limb+1)/T(:,:,i_limb));
+    T_ref = T(:,:,1); % 以支链1的位姿为绝对基准
+    for i_limb = 2 : 5
+        % 计算其他支链相对于基准支链的偏差
+        err(6*(i_limb-2)+1 : 6*(i_limb-2)+6) = log_se3(T(:,:,i_limb) / T_ref);
     end
 end
-
