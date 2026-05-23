@@ -1,9 +1,23 @@
-function basic_paras = basic_read(file_name)
+function basic_paras = basic_read(file_name, varargin)
     unit_para = 0.001;  % 0.001表示m，1表示mm
+    range_start = 2;
+    range_end = 30;
+    column = 'B';
+    
+    for k = 1:2:numel(varargin)
+        switch lower(varargin{k})
+            case 'column'
+                column = varargin{k+1};
+            otherwise
+                error('Unknown option: %s', varargin{k});
+        end
+    end
 
+    % range = 'B2:B30';
+    range = sprintf('%s%d:%s%d', column, range_start, column, range_end);
 
-    T = readtable(file_name, 'Range', 'A2:B30');
-    paras = table2array(T(:, 2));
+    T = readtable(file_name, 'Range', range);
+    paras = table2array(T(:, 1));
     l_max = paras(1)*unit_para;
     l_min = paras(2)*unit_para;  % 670
     R1 = paras(3)*unit_para;  % 550
@@ -13,13 +27,14 @@ function basic_paras = basic_read(file_name)
     r2 = paras(7)*unit_para;  % 80
     h = paras(8)*unit_para;  % 10
     L_tool = paras(12)*unit_para;
+    joint_u_angle_tilt = deg2rad(paras(13));
     % L_tool = 0;
     limb_dir = zeros(5, 2);
     l0_seq = zeros(5, 1);
     for i = 1 : 5
-        limb_dir(i, 1) = deg2rad(paras(12+i));
-        limb_dir(i, 2) = deg2rad(paras(12+5+i));
-        l0_seq(i) = paras(12+5+5+i)*unit_para;
+        limb_dir(i, 1) = deg2rad(paras(13+i));
+        limb_dir(i, 2) = deg2rad(paras(13+5+i));
+        l0_seq(i) = paras(13+5+5+i)*unit_para;
     end
 
     B1 = [R1*cos(limb_dir(1,1)); R1*sin(limb_dir(1,1)); 0];
@@ -50,5 +65,6 @@ function basic_paras = basic_read(file_name)
     basic_paras.B = B;
     basic_paras.P_m = P_m;
     basic_paras.l0_seq = l0_seq;
+    basic_paras.joint_u_angle_tilt = joint_u_angle_tilt;
 
 end
