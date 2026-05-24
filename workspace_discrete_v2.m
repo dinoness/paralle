@@ -6,7 +6,7 @@ flag_range_plot = 0;  % 1为开启，绘制出指定高度的空间范围
 path_add()
 fprintf('>>>= start (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 %--------parameter3--------
-basic_paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'mm');
+basic_paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'm');
 l_max = basic_paras.l_max;
 l_min = basic_paras.l_min;
 R1 = basic_paras.R1;
@@ -89,7 +89,7 @@ seq_x = (-400 : 10 : 400)*unit_para;
 seq_y = (-400 : 10 : 400)*unit_para;
 seq_z = (-1200 : 10 : -650)*unit_para;
 seq_phi = deg2rad((-180 : 30 : 180));
-seq_theta = deg2rad((0 : 5 : 90));
+seq_theta = deg2rad((0 : 2 : 30));
 len_x = length(seq_x);
 len_y = length(seq_y);
 len_z = length(seq_z);
@@ -99,6 +99,7 @@ len_phi = length(seq_phi);
 
 % assistant parameter
 work_space_ang = [0;0;0;0];  % 含角度的工作空间
+ang_threshold = deg2rad(9);
 work_space_up = [0;0;0];
 work_space_down = [0;0;0];
 pos_count = 0;  % 空间点计数
@@ -131,7 +132,7 @@ parfor ix = 1 : len_x
                     l_limb = zeros(1, 5);  % 支链长度
 
                     Pos_ref = [px; py; pz; seq_phi(iphi); theta];
-                    T_ref = pos2trans(Pos_ref, B);
+                    T_ref = pos2trans(Pos_ref, B, 'unit', 'rad');
                     vt = T_ref(1:3, 4);
                     R_plant = T_ref(1:3, 1:3);  % 由于考虑了支链约束，因此工作空间计算与上一版不同
                     P_v = R_plant * P_m;
@@ -197,7 +198,7 @@ parfor ix = 1 : len_x
             end  % theta
 
             % 含角度的工作空间
-            if pos_quality > -1
+            if pos_quality > ang_threshold
                 p_mark = [vt; rad2deg(pos_quality)];
                 work_space_ang = [work_space_ang p_mark];
             end
@@ -260,13 +261,13 @@ zlabel('z')
 
 %% 含角度的工作空间
 fig_ang = figure('Color', [1 1 1]);
-scatter3(work_space_ang(1,2:end), work_space_ang(2,2:end), work_space_ang(3,2:end), 0.5, work_space_ang(4,2:end), 'filled');
+scatter3(work_space_ang(1,2:end), work_space_ang(2,2:end), work_space_ang(3,2:end), 2, work_space_ang(4,2:end), 'filled');
 grid on
 axis equal
 xlabel('x')
 ylabel('y')
 zlabel('z')
-colormap(jet);                        % 可选：jet, parula, turbo, hot等
+colormap(parula); % 可选：jet, parula, turbo, hot等
 colorbar;
 
 %% range plot
