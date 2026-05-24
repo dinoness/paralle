@@ -1,13 +1,22 @@
 function basic_paras = basic_read(file_name, varargin)
-    unit_para = 0.001;  % 0.001表示m，1表示mm
     range_start = 2;
     range_end = 30;
     column = 'B';
+    unit_para = 0.001;  % 0.001表示m，1表示mm
     
     for k = 1:2:numel(varargin)
         switch lower(varargin{k})
             case 'column'
                 column = varargin{k+1};
+            case 'unit'
+                switch (varargin{k+1})
+                    case 'mm'
+                        unit_para = 1;
+                    case 'm'
+                        unit_para = 0.001;
+                    otherwise
+                        error("Undefined unit: %s", varargin{k+1})
+                end
             otherwise
                 error('Unknown option: %s', varargin{k});
         end
@@ -26,15 +35,15 @@ function basic_paras = basic_read(file_name, varargin)
     r1 = paras(6)*unit_para;  % 100
     r2 = paras(7)*unit_para;  % 80
     h = paras(8)*unit_para;  % 10
-    L_tool = paras(12)*unit_para;
-    joint_u_angle_tilt = deg2rad(paras(13));
+    L_tool = paras(9)*unit_para;
+    joint_u_angle_tilt = deg2rad(paras(10));
     % L_tool = 0;
     limb_dir = zeros(5, 2);
     l0_seq = zeros(5, 1);
     for i = 1 : 5
-        limb_dir(i, 1) = deg2rad(paras(13+i));
-        limb_dir(i, 2) = deg2rad(paras(13+5+i));
-        l0_seq(i) = paras(13+5+5+i)*unit_para;
+        limb_dir(i, 1) = deg2rad(paras(10+i));
+        limb_dir(i, 2) = deg2rad(paras(10+5+i));
+        l0_seq(i) = paras(10+5+5+i)*unit_para;
     end
 
     B1 = [R1*cos(limb_dir(1,1)); R1*sin(limb_dir(1,1)); 0];
@@ -66,5 +75,6 @@ function basic_paras = basic_read(file_name, varargin)
     basic_paras.P_m = P_m;
     basic_paras.l0_seq = l0_seq;
     basic_paras.joint_u_angle_tilt = joint_u_angle_tilt;
+    basic_paras.unit_para = unit_para;
 
 end

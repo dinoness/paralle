@@ -3,7 +3,7 @@ path_add();
 %% 参数集
 %--------parameter3--------
 unit_para = 0.001;  % 0.001表示m，1表示mm
-basic_paras = basic_read('parameters.xlsx', 'column', 'B');
+basic_paras = basic_read('parameters.xlsx', 'column', 'C');
 l_max = basic_paras.l_max;
 l_min = basic_paras.l_min;
 R1 = basic_paras.R1;
@@ -29,9 +29,9 @@ P = zeros(3, 5);    % 末端点坐标
 % -----end-parameter------
 
 
-x_seq = (-200 : 10 : 200) * unit_para;
-y_seq = (-200 : 10 : 200) * unit_para;
-z_seq = -650 * unit_para;
+x_seq = (-250 : 10 : 250) * unit_para;
+y_seq = (-500 : 10 : 0) * unit_para;
+z_seq = -800 * unit_para;
 phi_seq = 0;
 theta_seq = 0;
 Pos_ref_seq = [0*unit_para;0*unit_para;-650*unit_para;0;0];  % line=5 colum=n  角度的单位是° **一列为一组**
