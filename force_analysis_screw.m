@@ -157,10 +157,12 @@ for ix = 1 : nx
 
         ITI = min(lambda);
         OTI = min(eta);
+        LTI = min(ITI, OTI);
 
         %% ICI OCI
         zeta = screw_efficiency(SC(:, 1), TR1, 'p_cstr', B(:, 1));
         kappa = screw_efficiency(SC(:, 1), Delta_SO(:, 1), 'p_cstr', B(:, 1));
+        GCI = min(zeta, kappa);
 
         m_ITI(iy, ix) = ITI;
         m_OTI(iy, ix) = OTI;
