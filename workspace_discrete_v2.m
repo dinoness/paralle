@@ -167,25 +167,25 @@ parfor ix = 1 : len_x
                     % end
 
 
-                    % % 雅克比矩阵条件数计算
-                    % x_m = [1; 0; 0];
-                    % J1 = [s_limb (R_plant * x_m)];
-                    % J2 = [cross(P_v, s_limb, 1)  ...
-                    % (cross(P_v(:, 1 ), (R_plant * x_m)) + l_limb(1)*cross((R_plant * x_m), s_limb(:, 1)))];
-                    % J = [J1' J2'];
-                    % % structure of J
-                    % % J1'  J2'
-                    % % s1   \arr {ObP1} \times s1
-                    % % s2   \arr {ObP2} \times s2
-                    % % s3   \arr {ObP3} \times s3
-                    % % s4   \arr {ObP4} \times s4
-                    % % s5   \arr {ObP5} \times s5
-                    % % xb   L1(xb \times s1) + \arr {ObP1} \times xb
-                    % cond_J = cond(J);
-                    % det_J = det(J);
-                    % if abs(det_J) < 1e-8
-                    %     fprintf("x=%d,y=%d,z=%d,det_J=%.4f\n",seq_x(ix),seq_y(iy),seq_z(iz),det_J);
-                    % end
+                    % 雅克比矩阵条件数计算
+                    x_m = [1; 0; 0];
+                    J1 = [s_limb (R_plant * x_m)];
+                    J2 = [cross(P_v, s_limb, 1)  ...
+                    (cross(P_v(:, 1 ), (R_plant * x_m)) + l_limb(1)*cross((R_plant * x_m), s_limb(:, 1)))];
+                    J = [J1' J2'];
+                    % structure of J
+                    % J1'  J2'
+                    % s1   \arr {ObP1} \times s1
+                    % s2   \arr {ObP2} \times s2
+                    % s3   \arr {ObP3} \times s3
+                    % s4   \arr {ObP4} \times s4
+                    % s5   \arr {ObP5} \times s5
+                    % xb   L1(xb \times s1) + \arr {ObP1} \times xb
+                    cond_J = cond(J);
+                    det_J = det(J);
+                    if abs(det_J) < 1e-8
+                        fprintf("x=%d,y=%d,z=%d,det_J=%.4f\n",seq_x(ix),seq_y(iy),seq_z(iz),det_J);
+                    end
             
                 end  % phi
 

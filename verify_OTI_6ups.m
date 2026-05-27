@@ -42,9 +42,9 @@ y_seq = (-50 : 1 : 50);
 nx = length(x_seq);
 ny = length(y_seq);
 m_OTI = zeros(nx, ny);
-phi = deg2rad(20);
-theta = deg2rad(10);
-sigma = deg2rad(5);
+phi = deg2rad(0);  % 20 
+theta = deg2rad(0);  % 10
+sigma = deg2rad(0);  % 5
 
 for ix = 1 : nx
     for iy = 1 : ny

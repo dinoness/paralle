@@ -3,9 +3,16 @@
 % 角度空间：phi=[-180°, 180°], theta=[0°, 90°]
 % 几何假设：定平台与动平台支链 120° 均布，角度分别为 60°, 180°, 300°
 % P 副为垂直方向运动，R 副将支链约束在对应竖直平面内
+%
+% 说明：若结果与参考图沿 phi=90° 镜像对称，可将下方 phi_mirror 设为 true
 
 clear
 path_add();
+
+%% -------------------- 用户可选设置 --------------------
+phi_mirror = true;   % true: 使用 phi -> pi - phi（镜像映射）
+                      % false: 使用标准 phi 定义（默认）
+%% ----------------------------------------------------
 
 %% 机构参数（单位：mm）
 R1 = 200;           % 静平台半径
@@ -39,6 +46,11 @@ for iphi = 1 : nphi
     for itheta = 1 : theta_n
         phi   = phi_seq(iphi);
         theta = theta_seq(itheta);
+        
+        % 若启用镜像映射，将 phi 替换为 pi - phi
+        if phi_mirror
+            phi = pi - phi;
+        end
         
         % T&T 角旋转矩阵 R(phi, theta)
         cp = cos(phi);
@@ -131,8 +143,12 @@ for iphi = 1 : nphi
         OTI = min(eta);
         m_OTI(itheta, iphi) = OTI;
         
-        % 保存一个中间可行位姿的结果用于输出（phi≈0°, theta≈30°）
-        if ~eta_saved && abs(phi) < deg2rad(5) && abs(theta - deg2rad(30)) < deg2rad(5)
+        % 保存一个中间可行位姿的结果用于输出
+        phi_disp = phi_seq(iphi);
+        if phi_mirror
+            phi_disp = pi - phi_disp;
+        end
+        if ~eta_saved && abs(phi_disp) < deg2rad(5) && abs(theta - deg2rad(30)) < deg2rad(5)
             eta_all = eta;
             eta_saved = true;
         end
@@ -150,22 +166,10 @@ end
 fprintf('\n该位姿输出传递指标 OTI = min(eta_i) = %.6f\n', min(eta_all));
 fprintf('====================================================\n');
 
-%% 绘图
-% fig = figure('Color', [1 1 1]);
-% contourf(rad2deg(phi_seq), rad2deg(theta_seq), m_OTI, 20, 'LineColor', 'none');
-% hold on
-% contour(rad2deg(phi_seq), rad2deg(theta_seq), m_OTI, 5, 'k-', 'LineWidth', 0.5);
-% clim([0 1]);
-% colorbar;
-% colormap(jet);
-% xlabel('\phi (°)')
-% ylabel('\theta (°)')
-% title('3-PRS 输出传递指标 OTI')
-% axis tight
-
+%% 绘图（极坐标形式）
 fig = figure('Color', [1 1 1]);
 
-%% 1. 构建网格（若 phi_seq/theta_seq 已是网格矩阵，可省略）
+%% 1. 构建网格
 [Phi, Theta] = meshgrid(phi_seq, theta_seq);
 
 %% 2. 极坐标 -> 笛卡尔坐标（phi: 方位角[rad], theta: 半径[rad]）
@@ -177,24 +181,21 @@ contourf(X, Y, m_OTI, 20, 'LineColor', 'none');
 hold on;
 contour(X, Y, m_OTI, 5, 'k-', 'LineWidth', 0.5);
 
-%% 4. （可选）叠加极坐标网格线与刻度，增强可读性
-max_r = max(Theta(:));                 % 最大半径（即 theta 最大值）
-r_ticks = linspace(0, max_r, 5);       % 径向刻度圈数，可调整
-phi_ticks = linspace(-pi, pi, 13);     % 角度线，每 30° 一条
+%% 4. 叠加极坐标网格线与刻度
+max_r = max(Theta(:));
+r_ticks = linspace(0, max_r, 5);
+phi_ticks = linspace(-pi, pi, 13);
 
-% 绘制同心圆（对应 theta 常数）
 for r = r_ticks(2:end)
     th = linspace(0, 2*pi, 200);
     plot(r*cos(th), r*sin(th), '--', 'LineWidth', 0.3, 'Color', [0.5 0.5 0.5]);
 end
 
-% 绘制角度射线（对应 phi 常数）
 for p = phi_ticks(1:end-1)
     r_vec = linspace(0, max_r, 100);
     plot(r_vec*cos(p), r_vec*sin(p), '--', 'LineWidth', 0.3, 'Color', [0.5 0.5 0.5]);
 end
 
-% 径向刻度标签（在最右侧 phi=0° 处标注）
 for r = r_ticks(2:end)
     text(r, 0, sprintf(' %.0f°', rad2deg(r)), ...
         'VerticalAlignment', 'bottom', 'HorizontalAlignment', 'left', ...
@@ -205,9 +206,8 @@ end
 clim([0 1]);
 colorbar;
 colormap(jet);
-axis equal tight;          % 保证圆形比例正确，消除空白
+axis equal tight;
 
-% 隐藏笛卡尔轴标签（极坐标下不再需要 x/y label）
 xlabel('');
 ylabel('');
 title('3-PRS 输出传递指标 OTI');

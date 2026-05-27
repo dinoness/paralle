@@ -1,3 +1,4 @@
+% 计算满足一定角度的圆柱工作空间，并计算该圆柱空间的内的OTI
 clear
 fig_rotation_show = 0;  % 1开启展示旋转
 gif_generate_flag = 0;  % 1为开启录制功能，运行一次程序后记得改文件名
@@ -105,6 +106,7 @@ pos_count = 0;  % 空间点计数
 
 % 记录每个 [x,y,z] 下哪些 theta 是可达的（所有 phi 均满足）
 reachable_thetas = false(len_x, len_y, len_z, len_theta);
+pos_quality_matrix = -ones(len_x, len_y, len_z);  % 记录每个点的 pos_quality（可达的最大theta），-1为不可达
 
 
 %% 遍历
@@ -114,6 +116,7 @@ parfor ix = 1 : len_x
     local_ws_up = [0;0;0];
     local_ws_down = [0;0;0];
     local_reachable = false(len_y, len_z, len_theta);
+    local_pos_quality = -ones(len_y, len_z);
     local_count = 0;
 
     for iy = 1 : len_y
@@ -176,6 +179,8 @@ parfor ix = 1 : len_x
                 end
             end  % theta
 
+            local_pos_quality(iy, iz) = pos_quality;
+
             % 含角度的工作空间
             if pos_quality > ang_threshold
                 p_mark = [vt; rad2deg(pos_quality)];
@@ -210,6 +215,7 @@ parfor ix = 1 : len_x
     work_space_down = [work_space_down local_ws_down(:, 2:end)];
     pos_count = pos_count + local_count;
     reachable_thetas(ix, :, :, :) = local_reachable;
+    pos_quality_matrix(ix, :, :) = local_pos_quality;
 end  % x
 
 fprintf('Workspace search done. Reachable points with theta > threshold: %d\n', size(work_space_ang, 2)-1);
@@ -474,6 +480,247 @@ for k_line = 1 : 4 : length(theta_circle)
 end
 hold off
 
+
+
+%% ================== 可达空间中的最大圆柱 (R>0.1, H>0.1) ==================
+% 基于所有可达点（pos_quality >= 0）
+is_reachable_anytheta = pos_quality_matrix >= 0;
+
+% 寻找满足 R > 0.1, H > 0.1 的最大体积圆柱
+best_V2 = 0;
+best_R2 = 0;
+best_H2 = 0;
+best_x02 = 0;
+best_y02 = 0;
+best_iz1_2 = 0;
+best_iz2_2 = 0;
+
+for iz1 = 1 : len_z
+    for iz2 = iz1 : len_z
+        H_cand = seq_z(iz2) - seq_z(iz1);
+        if H_cand <= 0.1
+            continue;
+        end
+        
+        common_r = squeeze(is_reachable_anytheta(:, :, iz1));
+        for iz = iz1+1 : iz2
+            common_r = common_r & squeeze(is_reachable_anytheta(:, :, iz));
+        end
+        
+        if ~any(common_r(:))
+            continue;
+        end
+        
+        [reach_ix, reach_iy] = find(common_r);
+        reach_pts = [seq_x(reach_ix).', seq_y(reach_iy).'];
+        
+        [unreach_ix, unreach_iy] = find(~common_r);
+        unreach_pts = [seq_x(unreach_ix).', seq_y(unreach_iy).'];
+        
+        best_R_for_interval = 0;
+        best_center_for_interval = [0, 0];
+        
+        if isempty(unreach_pts)
+            x0_c = mean(reach_pts(:,1));
+            y0_c = mean(reach_pts(:,2));
+            dists = sqrt((reach_pts(:,1)-x0_c).^2 + (reach_pts(:,2)-y0_c).^2);
+            best_R_for_interval = max(dists);
+            best_center_for_interval = [x0_c, y0_c];
+        else
+            dx = bsxfun(@minus, reach_pts(:,1), unreach_pts(:,1)');
+            dy = bsxfun(@minus, reach_pts(:,2), unreach_pts(:,2)');
+            D = sqrt(dx.^2 + dy.^2);
+            R_limits = min(D, [], 2);
+            
+            for i = 1 : size(reach_pts, 1)
+                R_safe = R_limits(i) - 1e-6;
+                if R_safe > best_R_for_interval
+                    best_R_for_interval = R_safe;
+                    best_center_for_interval = reach_pts(i, :);
+                end
+            end
+        end
+        
+        R = best_R_for_interval;
+        if R <= 0.1
+            continue;
+        end
+        if (2*R/H_cand) <= 0.6
+            continue;
+        end
+        
+        V = pi * R^2 * H_cand;
+        if V > best_V2
+            best_V2 = V;
+            best_R2 = R;
+            best_H2 = H_cand;
+            best_x02 = best_center_for_interval(1);
+            best_y02 = best_center_for_interval(2);
+            best_iz1_2 = iz1;
+            best_iz2_2 = iz2;
+        end
+    end
+end
+
+fprintf('\n========== Cylinder in Reachable Space (R>0.1, H>0.1) ==========\n');
+if best_V2 <= 0
+    fprintf('No cylinder satisfies R > 0.1 and H > 0.1 in reachable space.\n');
+else
+    fprintf('Center (x0, y0) = (%.6f, %.6f) m\n', best_x02, best_y02);
+    fprintf('Radius R = %.6f m\n', best_R2);
+    fprintf('Height H = %.6f m\n', best_H2);
+    fprintf('Diameter/Height ratio = %.6f\n', 2*best_R2/best_H2);
+    fprintf('Volume V = %.8f m^3\n', best_V2);
+    fprintf('z range = [%.4f, %.4f] m\n', seq_z(best_iz1_2), seq_z(best_iz2_2));
+end
+fprintf('================================================================\n\n');
+
+%% ================== OTI at phi=0, theta=0 in the cylinder ==================
+if best_V2 > 0
+    oti_vals = [];
+    for ix = 1 : len_x
+        for iy = 1 : len_y
+            px = seq_x(ix);
+            py = seq_y(iy);
+            if sqrt((px-best_x02)^2 + (py-best_y02)^2) > best_R2 + 1e-9
+                continue;
+            end
+            for iz = best_iz1_2 : best_iz2_2
+                if ~is_reachable_anytheta(ix, iy, iz)
+                    continue;
+                end
+                pz = seq_z(iz);
+                % 姿态 phi=0, theta=0
+                Pos_ref = [px; py; pz; 0; 0];
+                T_ref = pos2trans(Pos_ref, B, 'unit', 'rad');
+                [~, ~, oti_val, ~] = compute_ltigci(T_ref, B, l0_seq, P_m, p_seq);
+                oti_vals = [oti_vals; oti_val];
+            end
+        end
+    end
+    
+    if ~isempty(oti_vals)
+        fprintf('========== OTI at phi=0, theta=0 in the cylinder ==========\n');
+        fprintf('Evaluated points: %d\n', length(oti_vals));
+        fprintf('OTI mean = %.8f\n', mean(oti_vals));
+        fprintf('OTI min  = %.8f\n', min(oti_vals));
+        fprintf('OTI max  = %.8f\n', max(oti_vals));
+        fprintf('============================================================\n\n');
+    else
+        fprintf('No valid OTI points at phi=0, theta=0 inside the cylinder.\n');
+    end
+end
+
+%% ================== LCI 计算（两个圆柱空间） ==================
+% LCI = 1 / cond(J)，其中 J 为雅可比矩阵
+% 参考 workspace_discrete_v2.m 中的条件数计算方法
+
+% 圆柱 1：基于 work_space_ang 的圆柱
+% 遍历圆柱内所有可达的 [x,y,z,theta,phi] 计算 LCI
+lci_cyl1 = [];
+if best_V > 0
+    for ix = 1 : len_x
+        for iy = 1 : len_y
+            px = seq_x(ix);
+            py = seq_y(iy);
+            if sqrt((px-x0_cyl)^2 + (py-y0_cyl)^2) > R_cyl + 1e-9
+                continue;
+            end
+            for iz = best_iz1 : best_iz2
+                pz = seq_z(iz);
+                if ~is_ws_ang(ix, iy, iz)
+                    continue;
+                end
+                for itheta = 1 : len_theta
+                    if ~reachable_thetas(ix, iy, iz, itheta)
+                        continue;
+                    end
+                    theta = seq_theta(itheta);
+                    for iphi = 1 : len_phi
+                        phi = seq_phi(iphi);
+                        Pos_ref = [px; py; pz; phi; theta];
+                        T_ref = pos2trans(Pos_ref, B, 'unit', 'rad');
+                        vt = T_ref(1:3, 4);
+                        R_plant = T_ref(1:3, 1:3);
+                        P_v = R_plant * P_m;
+
+                        s_limb = zeros(3, 5);
+                        l_limb = zeros(1, 5);
+                        for j = 1 : 5
+                            vAa = vt + P_v(:, j) - B(:, j);
+                            len_vAa = norm(vAa);
+                            l_limb(j) = len_vAa;
+                            s_limb(:, j) = vAa / len_vAa;
+                        end
+
+                        x_m = [1; 0; 0];
+                        J1 = [s_limb (R_plant * x_m)];
+                        J2 = [cross(P_v, s_limb, 1)  ...
+                              (cross(P_v(:, 1), (R_plant * x_m)) + l_limb(1)*cross((R_plant * x_m), s_limb(:, 1)))];
+                        J = [J1' J2'];
+                        lci_cyl1 = [lci_cyl1; 1/cond(J)];
+                    end
+                end
+            end
+        end
+    end
+end
+
+% 圆柱 2：基于所有可达点的圆柱
+lci_cyl2 = [];
+if best_V2 > 0
+    for ix = 1 : len_x
+        for iy = 1 : len_y
+            px = seq_x(ix);
+            py = seq_y(iy);
+            if sqrt((px-best_x02)^2 + (py-best_y02)^2) > best_R2 + 1e-9
+                continue;
+            end
+            for iz = best_iz1_2 : best_iz2_2
+                pz = seq_z(iz);
+                if ~is_reachable_anytheta(ix, iy, iz)
+                    continue;
+                end
+                Pos_ref = [px; py; pz; 0; 0];
+                T_ref = pos2trans(Pos_ref, B, 'unit', 'rad');
+                vt = T_ref(1:3, 4);
+                R_plant = T_ref(1:3, 1:3);
+                P_v = R_plant * P_m;
+
+                s_limb = zeros(3, 5);
+                l_limb = zeros(1, 5);
+                for j = 1 : 5
+                    vAa = vt + P_v(:, j) - B(:, j);
+                    len_vAa = norm(vAa);
+                    l_limb(j) = len_vAa;
+                    s_limb(:, j) = vAa / len_vAa;
+                end
+
+                x_m = [1; 0; 0];
+                J1 = [s_limb (R_plant * x_m)];
+                J2 = [cross(P_v, s_limb, 1)  ...
+                      (cross(P_v(:, 1), (R_plant * x_m)) + l_limb(1)*cross((R_plant * x_m), s_limb(:, 1)))];
+                J = [J1' J2'];
+                lci_cyl2 = [lci_cyl2; 1/cond(J)];
+            end
+        end
+    end
+end
+
+fprintf('\n========== LCI Statistics ==========\n');
+if ~isempty(lci_cyl1)
+    fprintf('Cylinder 1 (work_space_ang, all theta&phi): mean LCI = %.8f, points = %d\n', mean(lci_cyl1), length(lci_cyl1));
+else
+    fprintf('Cylinder 1: no valid points for LCI.\n');
+end
+if ~isempty(lci_cyl2)
+    fprintf('Cylinder 2 (reachable, phi=0, theta=0):     mean LCI = %.8f, points = %d\n', mean(lci_cyl2), length(lci_cyl2));
+else
+    fprintf('Cylinder 2: no valid points for LCI.\n');
+end
+fprintf('====================================\n\n');
+
+
 %% ------- plot workspace (same as v2) -------
 fig = figure('Color', [1 1 1]);
 % 机构简图
@@ -498,6 +745,27 @@ for k_line = 1 : 4 : length(theta_circle)
           [y_circle_top(k_line), y_circle_top(k_line)], ...
           [z_min_cyl, z_max_cyl], 'r--', 'LineWidth', 0.5);
 end
+
+% 绘制新圆柱（可达空间中的最大圆柱 R>0.1, H>0.1），用蓝色虚线区分
+if best_V2 > 0
+    theta_circle2 = linspace(0, 2*pi, 100);
+    x_circle2 = best_x02 + best_R2 * cos(theta_circle2);
+    y_circle2 = best_y02 + best_R2 * sin(theta_circle2);
+    z_top2 = seq_z(best_iz2_2) * ones(size(theta_circle2));
+    z_bot2 = seq_z(best_iz1_2) * ones(size(theta_circle2));
+    plot3(x_circle2, y_circle2, z_top2, 'b--', 'LineWidth', 1.5);
+    plot3(x_circle2, y_circle2, z_bot2, 'b--', 'LineWidth', 1.5);
+    for k_line = 1 : 4 : length(theta_circle2)
+        plot3([x_circle2(k_line), x_circle2(k_line)], ...
+              [y_circle2(k_line), y_circle2(k_line)], ...
+              [seq_z(best_iz1_2), seq_z(best_iz2_2)], 'b--', 'LineWidth', 0.5);
+    end
+    legend('Workspace cylinder (work_space_ang, R≥0.055)', 'Workspace cylinder (reachable, R>0.1)', 'Location', 'best');
+else
+    legend('Workspace cylinder (work_space_ang, R≥0.055)', 'Location', 'best');
+end
+hold off
+
 grid on
 axis equal
 xlabel('x')
