@@ -7,8 +7,8 @@ fprintf('Using surrogateopt (Global Optimization Toolbox)\n\n');
 
 %% 1. 优化设置
 % 决策变量: [H_mm, h_mm, r1_mm, r2_mm, a_deg, b_deg]
-lb = [-20, 60, 100,  60,  40,  40];
-ub = [  5, 150, 150,  70,  50,  80];
+lb = [-20,  80, 100,  60,  40,  50];
+ub = [ 30, 200, 180,  70,  50,  70];
 
 % 权重（可调整）
 k1 = 0.6;
@@ -28,7 +28,8 @@ rng(42);  % 可重复性
 
 %% 2. 运行优化
 fprintf('Starting surrogateopt...\n');
-fprintf('Bounds: H=[0,20], h=[10,50], r1=[90,130], r2=[60,80], a=[25,50]\n');
+fprintf('Bounds: H=[%.0f,%.0f], h=[%.0f,%.0f], r1=[%.0f,%.0f], r2=[%.0f,%.0f], a=[%.0f,%.0f], b=[%.0f,%.0f]\n', ...
+    lb(1), ub(1), lb(2), ub(2), lb(3), ub(3), lb(4), ub(4), lb(5), ub(5), lb(6), ub(6));
 fprintf('Weights: k1=%.2f, k2=%.2f\n\n', k1, k2);
 
 [x_opt, fval, exitflag, output] = surrogateopt(fun, lb, ub, options);

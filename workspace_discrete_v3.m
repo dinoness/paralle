@@ -1,51 +1,95 @@
-% 计算满足一定角度的圆柱工作空间，并计算该圆柱空间的内的OTI
+% 计算满足一定角度的圆柱工作空间，并计算该圆柱空间的内的OTI，LCI
+% =====================注意搜索间隙=====================
 clear
 fig_rotation_show = 0;  % 1开启展示旋转
 gif_generate_flag = 0;  % 1为开启录制功能，运行一次程序后记得改文件名
 flag_range_plot = 0;  % 1为开启，绘制出指定高度的空间范围
 
+% para_control
+H_limit_red = 0.08;
+R_limit_red = 0.055;
+H_limit_blue = 0.1;
+R_limit_blue = 0.1;
+
 path_add()
 fprintf('>>>= start (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 %--------parameter3--------
-basic_paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'm');
-l_max = basic_paras.l_max;
-l_min = basic_paras.l_min;
-R1 = basic_paras.R1;
-R2 = basic_paras.R2;
-H = basic_paras.H;
-r1 = basic_paras.r1;
-r2 = basic_paras.r2;
-h = basic_paras.h;
-L_tool = basic_paras.L_tool;
-limb_dir = basic_paras.limb_dir;
-B = basic_paras.B;
-P_m = basic_paras.P_m;
-l0_seq = basic_paras.l0_seq;
-joint_u_angle_tilt = basic_paras.joint_u_angle_tilt;
-unit_para = basic_paras.unit_para;
+basic_paras = basic_read('parameters.xlsx', 'column', 'M', 'unit', 'm');  % 单位意思是程序中用到的单位
 
-L_tool = 0;
+% >>> 自动加载 surrogateopt 优化结果（避免手动输入 parameters.xlsx 时顺序/角度出错）<<<
+use_optimized_params = false;
+
+if use_optimized_params && exist('optimization_result.mat', 'file')
+    load('optimization_result.mat', 'results');
+    x_opt = results.x_opt(:)';
+    fprintf('\n>>> Loaded optimized parameters from optimization_result.mat <<<\n');
+    fprintf('    x_opt = [H=%.4f mm, h=%.4f mm, r1=%.4f mm, r2=%.4f mm, a=%.4f deg, b=%.4f deg]\n', ...
+            x_opt(1), x_opt(2), x_opt(3), x_opt(4), x_opt(5), x_opt(6));
+
+    % 按 evaluate_spr4ups_objective.m 的相同方式覆盖参数
+    unit_para = basic_paras.unit_para;
+    l_max = basic_paras.l_max;
+    l_min = basic_paras.l_min;
+    R1    = basic_paras.R1;
+    R2    = basic_paras.R2;
+    H     = x_opt(1) * 0.001;
+    h     = x_opt(2) * 0.001;
+    r1    = x_opt(3) * 0.001;
+    r2    = x_opt(4) * 0.001;
+    L_tool = basic_paras.L_tool;
+    joint_u_angle_tilt = basic_paras.joint_u_angle_tilt;
+    l0_seq = basic_paras.l0_seq;
+
+    % 更新 limb_dir（与 evaluate_spr4ups_objective.m 一致）
+    limb_dir = basic_paras.limb_dir;
+    a = deg2rad(x_opt(5));
+    b = deg2rad(x_opt(6));
+    limb_dir(4, 2) = deg2rad(90) - a;
+    limb_dir(5, 2) = deg2rad(90) + a;
+    limb_dir(2, 2) = deg2rad(270) - b;
+    limb_dir(3, 2) = deg2rad(270) + b;
+
+    % 重新计算 B, P_m（与 evaluate_spr4ups_objective.m 一致）
+    B1 = [R1*cos(limb_dir(1,1)); R1*sin(limb_dir(1,1)); 0];
+    B2 = [R1*cos(limb_dir(2,1)); R1*sin(limb_dir(2,1)); 0];
+    B3 = [R1*cos(limb_dir(3,1)); R1*sin(limb_dir(3,1)); 0];
+    B4 = [R2*cos(limb_dir(4,1)); R2*sin(limb_dir(4,1)); H];
+    B5 = [R2*cos(limb_dir(5,1)); R2*sin(limb_dir(5,1)); H];
+    B = [B1 B2 B3 B4 B5];
+
+    P1_m = [r1*cos(limb_dir(1,2)); r1*sin(limb_dir(1,2)); L_tool];
+    P2_m = [r1*cos(limb_dir(2,2)); r1*sin(limb_dir(2,2)); L_tool];
+    P3_m = [r1*cos(limb_dir(3,2)); r1*sin(limb_dir(3,2)); L_tool];
+    P4_m = [r2*cos(limb_dir(4,2)); r2*sin(limb_dir(4,2)); L_tool+h];
+    P5_m = [r2*cos(limb_dir(5,2)); r2*sin(limb_dir(5,2)); L_tool+h];
+    P_m = [P1_m P2_m P3_m P4_m P5_m];
+
+    fprintf('>>> Optimized parameters applied successfully. <<<\n\n');
+else
+    % 使用 parameters.xlsx 原始参数
+    l_max = basic_paras.l_max;
+    l_min = basic_paras.l_min;
+    R1 = basic_paras.R1;
+    R2 = basic_paras.R2;
+    H = basic_paras.H;
+    r1 = basic_paras.r1;
+    r2 = basic_paras.r2;
+    h = basic_paras.h;
+    L_tool = basic_paras.L_tool;
+    limb_dir = basic_paras.limb_dir;
+    B = basic_paras.B;
+    P_m = basic_paras.P_m;
+    l0_seq = basic_paras.l0_seq;
+    joint_u_angle_tilt = basic_paras.joint_u_angle_tilt;
+    unit_para = basic_paras.unit_para;
+
+    if use_optimized_params
+        warning('optimization_result.mat not found. Using parameters.xlsx directly.');
+    end
+end
 
 pos_plant = [0; 0; -800]*unit_para;  % 后面作图用，不参与空间搜索
-alpha_plant = 0;  % 绕 x
-beta_plant = 0;  % 绕 y
-gamma_plant = 0;  % 绕 z
-
-
-Rx = [1                0                 0;
-      0 cos(alpha_plant) -sin(alpha_plant);
-      0 sin(alpha_plant)  cos(alpha_plant)];
-
-Ry = [ cos(beta_plant) 0 sin(beta_plant);
-                     0 1               0;
-      -sin(beta_plant) 0 cos(beta_plant)];
-
-Rz = [cos(gamma_plant) -sin(gamma_plant) 0;
-      sin(gamma_plant)  cos(gamma_plant) 0;
-                     0                0  1];
-
-R_plant = Rz * Ry * Rx;
-
+R_plant = eye(3);
 P_v = zeros(3, 5);  % 只变换了方向，没变换起点
 P = zeros(3, 5);    % 末端点坐标
 for i = 1 : 5
@@ -85,9 +129,9 @@ p_seq = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
 
 % ------search space-------
-seq_x = (-400 : 10 : 400)*unit_para;
-seq_y = (-400 : 10 : 400)*unit_para;
-seq_z = (-1200 : 10 : -600)*unit_para;
+seq_x = (-400 : 5 : 400)*unit_para;
+seq_y = (-400 : 5 : 400)*unit_para;
+seq_z = (-1200 : 5 : -600)*unit_para;
 seq_phi = deg2rad((-180 : 30 : 180));
 seq_theta = deg2rad((0 : 2 : 30));
 len_x = length(seq_x);
@@ -260,7 +304,7 @@ best_iz2 = 0;
 for iz1 = 1 : len_z
     for iz2 = iz1 : len_z
         H = seq_z(iz2) - seq_z(iz1);
-        if H < 0.1
+        if H < H_limit_red
             continue;
         end
         
@@ -309,7 +353,7 @@ for iz1 = 1 : len_z
         end
         
         R = best_R_for_interval;
-        if R < 0.05
+        if R < R_limit_red
             continue;
         end
         if (2*R/H) <= 0.6
@@ -330,155 +374,168 @@ for iz1 = 1 : len_z
 end
 
 if best_V <= 0
-    error('No cylinder satisfies the constraints inside work_space_ang.');
+    warning('No cylinder satisfies the constraints inside work_space_ang (R>=%.4f, H>=%.4f, 2R/H>0.6).', R_limit_red,H_limit_red);
+    fprintf('Diagnostics:\n');
+    fprintf('  work_space_ang points (theta > %.1f deg): %d\n', rad2deg(ang_threshold), size(work_space_ang,2)-1);
+    if size(work_space_ang,2) > 1
+        z_unique = unique(work_space_ang(3,2:end));
+        fprintf('  Unique z layers in work_space_ang: %d (range: [%.4f, %.4f] m)\n', ...
+                length(z_unique), min(z_unique), max(z_unique));
+    end
+    fprintf('Skipping LTI/GCI and LCI computations for cylinder 1.\n\n');
+
+    R_cyl = 0; H_cyl = 0; x0_cyl = 0; y0_cyl = 0;
+    z_min_cyl = 0; z_max_cyl = 0; V_cyl = 0;
+    best_iz1 = 1; best_iz2 = 1;
+else
+    R_cyl = best_R;
+    H_cyl = best_H;
+    x0_cyl = best_x0;
+    y0_cyl = best_y0;
+    z_min_cyl = seq_z(best_iz1);
+    z_max_cyl = seq_z(best_iz2);
+    V_cyl = best_V;
+
+    fprintf('\n========== Cylinder Workspace ==========\n');
+    fprintf('Cylinder center (x0, y0) = (%.6f, %.6f) m\n', x0_cyl, y0_cyl);
+    fprintf('Cylinder radius R = %.6f m\n', R_cyl);
+    fprintf('Cylinder height H = %.6f m\n', H_cyl);
+    fprintf('Diameter/Height ratio = %.6f\n', 2*R_cyl/H_cyl);
+    fprintf('Cylinder volume V = %.8f m^3\n', V_cyl);
+    fprintf('z range = [%.4f, %.4f] m\n', z_min_cyl, z_max_cyl);
+    fprintf('========================================\n\n');
 end
 
-R_cyl = best_R;
-H_cyl = best_H;
-x0_cyl = best_x0;
-y0_cyl = best_y0;
-z_min_cyl = seq_z(best_iz1);
-z_max_cyl = seq_z(best_iz2);
-V_cyl = best_V;
 
-fprintf('\n========== Cylinder Workspace ==========\n');
-fprintf('Cylinder center (x0, y0) = (%.6f, %.6f) m\n', x0_cyl, y0_cyl);
-fprintf('Cylinder radius R = %.6f m\n', R_cyl);
-fprintf('Cylinder height H = %.6f m\n', H_cyl);
-fprintf('Diameter/Height ratio = %.6f\n', 2*R_cyl/H_cyl);
-fprintf('Cylinder volume V = %.8f m^3\n', V_cyl);
-fprintf('z range = [%.4f, %.4f] m\n', z_min_cyl, z_max_cyl);
-fprintf('========================================\n\n');
+if best_V > 0
+    %% ================== LTI / GCI Computation ==================
+    fprintf('Starting LTI/GCI computation... This may take a while.\n');
 
+    % 分块并行计算，减少通信开销
+    ltigci_cell = cell(len_x, 1);
 
-%% ================== LTI / GCI Computation ==================
-fprintf('Starting LTI/GCI computation... This may take a while.\n');
-
-% 分块并行计算，减少通信开销
-ltigci_cell = cell(len_x, 1);
-
-parfor ix = 1 : len_x
-    px = seq_x(ix);
-    local_data = [];
-    for iy = 1 : len_y
-        py = seq_y(iy);
-        r_xy = sqrt((px - x0_cyl)^2 + (py - y0_cyl)^2);
-        if r_xy > R_cyl
-            continue;
-        end
-        for iz = 1 : len_z
-            pz = seq_z(iz);
-            if pz < z_min_cyl || pz > z_max_cyl
+    parfor ix = 1 : len_x
+        px = seq_x(ix);
+        local_data = [];
+        for iy = 1 : len_y
+            py = seq_y(iy);
+            r_xy = sqrt((px - x0_cyl)^2 + (py - y0_cyl)^2);
+            if r_xy > R_cyl
                 continue;
             end
-            for itheta = 1 : len_theta
-                if ~reachable_thetas(ix, iy, iz, itheta)
+            for iz = 1 : len_z
+                pz = seq_z(iz);
+                if pz < z_min_cyl || pz > z_max_cyl
                     continue;
                 end
-                theta = seq_theta(itheta);
+                for itheta = 1 : len_theta
+                    if ~reachable_thetas(ix, iy, iz, itheta)
+                        continue;
+                    end
+                    theta = seq_theta(itheta);
 
-                lti_phi = zeros(len_phi, 1);
-                gci_phi = zeros(len_phi, 1);
-                for iphi = 1 : len_phi
-                    Pos_ref = [px; py; pz; seq_phi(iphi); theta];
-                    T_ref = pos2trans(Pos_ref, B, 'unit', 'rad');
-                    [lti_val, gci_val] = compute_ltigci(T_ref, B, l0_seq, P_m, p_seq);
-                    lti_phi(iphi) = lti_val;
-                    gci_phi(iphi) = gci_val;
+                    lti_phi = zeros(len_phi, 1);
+                    gci_phi = zeros(len_phi, 1);
+                    for iphi = 1 : len_phi
+                        Pos_ref = [px; py; pz; seq_phi(iphi); theta];
+                        T_ref = pos2trans(Pos_ref, B, 'unit', 'rad');
+                        [lti_val, gci_val] = compute_ltigci(T_ref, B, l0_seq, P_m, p_seq);
+                        lti_phi(iphi) = lti_val;
+                        gci_phi(iphi) = gci_val;
+                    end
+                    mean_lti = mean(lti_phi);
+                    mean_gci = mean(gci_phi);
+                    local_data = [local_data; px, py, pz, theta, mean_lti, mean_gci, ix, iy, iz];
                 end
-                mean_lti = mean(lti_phi);
-                mean_gci = mean(gci_phi);
-                local_data = [local_data; px, py, pz, theta, mean_lti, mean_gci, ix, iy, iz];
             end
         end
+        ltigci_cell{ix} = local_data;
     end
-    ltigci_cell{ix} = local_data;
-end
 
-% 合并结果
-all_ltigci = [];
-for ix = 1 : len_x
-    if ~isempty(ltigci_cell{ix})
-        all_ltigci = [all_ltigci; ltigci_cell{ix}];
+    % 合并结果
+    all_ltigci = [];
+    for ix = 1 : len_x
+        if ~isempty(ltigci_cell{ix})
+            all_ltigci = [all_ltigci; ltigci_cell{ix}];
+        end
+    end
+
+    N_total = size(all_ltigci, 1);
+    if N_total == 0
+        warning('No reachable points found inside the cylinder. Skipping LTI/GCI output.');
+    else
+        % 输出 1：全局统计
+        mean_LTI = mean(all_ltigci(:,5));
+        min_LTI = min(all_ltigci(:,5));
+        mean_GCI = mean(all_ltigci(:,6));
+        min_GCI = min(all_ltigci(:,6));
+
+        fprintf('\n========== LTI / GCI Statistics (all [x,y,z,theta] in cylinder) ==========\n');
+        fprintf('Total evaluated [x,y,z,theta] points: %d\n', N_total);
+        fprintf('LTI  —  mean: %.8f,  min: %.8f\n', mean_LTI, min_LTI);
+        fprintf('GCI  —  mean: %.8f,  min: %.8f\n', mean_GCI, min_GCI);
+        fprintf('==========================================================================\n\n');
+
+        %% ================== Output 2: 3D Scatter Plot ==================
+        % 对每个 [x,y,z]，在可达的 theta 上取 LTI 和 GCI 的平均值
+        idx_x = all_ltigci(:, 7);
+        idx_y = all_ltigci(:, 8);
+        idx_z = all_ltigci(:, 9);
+
+        lin_idx = sub2ind([len_x, len_y, len_z], idx_x, idx_y, idx_z);
+        lti_sum = accumarray(lin_idx, all_ltigci(:,5), [len_x*len_y*len_z, 1]);
+        lti_cnt = accumarray(lin_idx, ones(N_total,1), [len_x*len_y*len_z, 1]);
+        gci_sum = accumarray(lin_idx, all_ltigci(:,6), [len_x*len_y*len_z, 1]);
+        gci_cnt = accumarray(lin_idx, ones(N_total,1), [len_x*len_y*len_z, 1]);
+
+        valid_idx = find(lti_cnt > 0);
+        N_valid = length(valid_idx);
+        point_LTI = zeros(N_valid, 1);
+        point_GCI = zeros(N_valid, 1);
+        point_x = zeros(N_valid, 1);
+        point_y = zeros(N_valid, 1);
+        point_z = zeros(N_valid, 1);
+
+        for k = 1 : N_valid
+            lin = valid_idx(k);
+            [ix, iy, iz] = ind2sub([len_x, len_y, len_z], lin);
+            point_x(k) = seq_x(ix);
+            point_y(k) = seq_y(iy);
+            point_z(k) = seq_z(iz);
+            point_LTI(k) = lti_sum(lin) / lti_cnt(lin);
+            point_GCI(k) = gci_sum(lin) / gci_cnt(lin);
+        end
+
+        fig_cyl = figure('Color', [1 1 1]);
+        scatter3(point_x, point_y, point_z, 20, point_LTI, 'filled');
+        % scatter3(work_space_ang(1,2:end), work_space_ang(2,2:end), work_space_ang(3,2:end), 2, work_space_ang(4,2:end), 'filled');
+        grid on
+        axis equal
+        xlabel('x')
+        ylabel('y')
+        zlabel('z')
+        colormap(jet);
+        colorbar;
+        title('Cylindrical Workspace colored by LTI (averaged over \theta)');
+
+        % 绘制圆柱边界（可选，帮助可视化）
+        hold on
+        % 画上下两个圆
+        theta_circle = linspace(0, 2*pi, 100);
+        x_circle_top = x0_cyl + R_cyl * cos(theta_circle);
+        y_circle_top = y0_cyl + R_cyl * sin(theta_circle);
+        z_circle_top = z_max_cyl * ones(size(theta_circle));
+        z_circle_bottom = z_min_cyl * ones(size(theta_circle));
+        plot3(x_circle_top, y_circle_top, z_circle_top, 'r--', 'LineWidth', 1.5);
+        plot3(x_circle_top, y_circle_top, z_circle_bottom, 'r--', 'LineWidth', 1.5);
+        for k_line = 1 : 4 : length(theta_circle)
+            plot3([x_circle_top(k_line), x_circle_top(k_line)], ...
+                  [y_circle_top(k_line), y_circle_top(k_line)], ...
+                  [z_min_cyl, z_max_cyl], 'r--', 'LineWidth', 0.5);
+        end
+        hold off
     end
 end
-
-N_total = size(all_ltigci, 1);
-if N_total == 0
-    error('No reachable points found inside the cylinder. Check workspace or cylinder parameters.');
-end
-
-% 输出 1：全局统计
-mean_LTI = mean(all_ltigci(:,5));
-min_LTI = min(all_ltigci(:,5));
-mean_GCI = mean(all_ltigci(:,6));
-min_GCI = min(all_ltigci(:,6));
-
-fprintf('\n========== LTI / GCI Statistics (all [x,y,z,theta] in cylinder) ==========\n');
-fprintf('Total evaluated [x,y,z,theta] points: %d\n', N_total);
-fprintf('LTI  —  mean: %.8f,  min: %.8f\n', mean_LTI, min_LTI);
-fprintf('GCI  —  mean: %.8f,  min: %.8f\n', mean_GCI, min_GCI);
-fprintf('==========================================================================\n\n');
-
-
-%% ================== Output 2: 3D Scatter Plot ==================
-% 对每个 [x,y,z]，在可达的 theta 上取 LTI 和 GCI 的平均值
-idx_x = all_ltigci(:, 7);
-idx_y = all_ltigci(:, 8);
-idx_z = all_ltigci(:, 9);
-
-lin_idx = sub2ind([len_x, len_y, len_z], idx_x, idx_y, idx_z);
-lti_sum = accumarray(lin_idx, all_ltigci(:,5), [len_x*len_y*len_z, 1]);
-lti_cnt = accumarray(lin_idx, ones(N_total,1), [len_x*len_y*len_z, 1]);
-gci_sum = accumarray(lin_idx, all_ltigci(:,6), [len_x*len_y*len_z, 1]);
-gci_cnt = accumarray(lin_idx, ones(N_total,1), [len_x*len_y*len_z, 1]);
-
-valid_idx = find(lti_cnt > 0);
-N_valid = length(valid_idx);
-point_LTI = zeros(N_valid, 1);
-point_GCI = zeros(N_valid, 1);
-point_x = zeros(N_valid, 1);
-point_y = zeros(N_valid, 1);
-point_z = zeros(N_valid, 1);
-
-for k = 1 : N_valid
-    lin = valid_idx(k);
-    [ix, iy, iz] = ind2sub([len_x, len_y, len_z], lin);
-    point_x(k) = seq_x(ix);
-    point_y(k) = seq_y(iy);
-    point_z(k) = seq_z(iz);
-    point_LTI(k) = lti_sum(lin) / lti_cnt(lin);
-    point_GCI(k) = gci_sum(lin) / gci_cnt(lin);
-end
-
-fig_cyl = figure('Color', [1 1 1]);
-scatter3(point_x, point_y, point_z, 20, point_LTI, 'filled');
-% scatter3(work_space_ang(1,2:end), work_space_ang(2,2:end), work_space_ang(3,2:end), 2, work_space_ang(4,2:end), 'filled');
-grid on
-axis equal
-xlabel('x')
-ylabel('y')
-zlabel('z')
-colormap(jet);
-colorbar;
-title('Cylindrical Workspace colored by LTI (averaged over \theta)');
-
-% 绘制圆柱边界（可选，帮助可视化）
-hold on
-% 画上下两个圆
-theta_circle = linspace(0, 2*pi, 100);
-x_circle_top = x0_cyl + R_cyl * cos(theta_circle);
-y_circle_top = y0_cyl + R_cyl * sin(theta_circle);
-z_circle_top = z_max_cyl * ones(size(theta_circle));
-z_circle_bottom = z_min_cyl * ones(size(theta_circle));
-plot3(x_circle_top, y_circle_top, z_circle_top, 'r--', 'LineWidth', 1.5);
-plot3(x_circle_top, y_circle_top, z_circle_bottom, 'r--', 'LineWidth', 1.5);
-for k_line = 1 : 4 : length(theta_circle)
-    plot3([x_circle_top(k_line), x_circle_top(k_line)], ...
-          [y_circle_top(k_line), y_circle_top(k_line)], ...
-          [z_min_cyl, z_max_cyl], 'r--', 'LineWidth', 0.5);
-end
-hold off
 
 
 
@@ -498,7 +555,7 @@ best_iz2_2 = 0;
 for iz1 = 1 : len_z
     for iz2 = iz1 : len_z
         H_cand = seq_z(iz2) - seq_z(iz1);
-        if H_cand <= 0.1
+        if H_cand <= H_limit_blue
             continue;
         end
         
@@ -542,7 +599,7 @@ for iz1 = 1 : len_z
         end
         
         R = best_R_for_interval;
-        if R <= 0.1
+        if R <= R_limit_blue
             continue;
         end
         if (2*R/H_cand) <= 0.6
@@ -564,7 +621,7 @@ end
 
 fprintf('\n========== Cylinder in Reachable Space (R>0.1, H>0.1) ==========\n');
 if best_V2 <= 0
-    fprintf('No cylinder satisfies R > 0.1 and H > 0.1 in reachable space.\n');
+    fprintf('No cylinder satisfies R > %.4f and H > %.4f in reachable space.\n', R_limit_blue, H_limit_blue);
 else
     fprintf('Center (x0, y0) = (%.6f, %.6f) m\n', best_x02, best_y02);
     fprintf('Radius R = %.6f m\n', best_R2);
@@ -738,12 +795,14 @@ end
 scatter3(work_space_up(1,2:end), work_space_up(2,2:end), work_space_up(3,2:end), 2, work_space_up(3,2:end),'filled');
 scatter3(work_space_down(1,2:end), work_space_down(2,2:end), work_space_down(3,2:end), 2, work_space_down(3,2:end),'filled');
 
-plot3(x_circle_top, y_circle_top, z_circle_top, 'r--', 'LineWidth', 1.5);
-plot3(x_circle_top, y_circle_top, z_circle_bottom, 'r--', 'LineWidth', 1.5);
-for k_line = 1 : 4 : length(theta_circle)
-    plot3([x_circle_top(k_line), x_circle_top(k_line)], ...
-          [y_circle_top(k_line), y_circle_top(k_line)], ...
-          [z_min_cyl, z_max_cyl], 'r--', 'LineWidth', 0.5);
+if best_V > 0
+    plot3(x_circle_top, y_circle_top, z_circle_top, 'r--', 'LineWidth', 1.5);
+    plot3(x_circle_top, y_circle_top, z_circle_bottom, 'r--', 'LineWidth', 1.5);
+    for k_line = 1 : 4 : length(theta_circle)
+        plot3([x_circle_top(k_line), x_circle_top(k_line)], ...
+              [y_circle_top(k_line), y_circle_top(k_line)], ...
+              [z_min_cyl, z_max_cyl], 'r--', 'LineWidth', 0.5);
+    end
 end
 
 % 绘制新圆柱（可达空间中的最大圆柱 R>0.1, H>0.1），用蓝色虚线区分
@@ -760,9 +819,17 @@ if best_V2 > 0
               [y_circle2(k_line), y_circle2(k_line)], ...
               [seq_z(best_iz1_2), seq_z(best_iz2_2)], 'b--', 'LineWidth', 0.5);
     end
-    legend('Workspace cylinder (work_space_ang, R≥0.055)', 'Workspace cylinder (reachable, R>0.1)', 'Location', 'best');
-else
-    legend('Workspace cylinder (work_space_ang, R≥0.055)', 'Location', 'best');
+end
+
+legend_str = {};
+if best_V > 0
+    legend_str{end+1} = 'Workspace cylinder (work_space_ang, R≥0.055)';
+end
+if best_V2 > 0
+    legend_str{end+1} = 'Workspace cylinder (reachable, R>0.1)';
+end
+if ~isempty(legend_str)
+    legend(legend_str, 'Location', 'best');
 end
 hold off
 

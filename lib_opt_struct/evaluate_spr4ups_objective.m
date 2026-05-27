@@ -2,7 +2,7 @@ function J = evaluate_spr4ups_objective(params, k1, k2)
 %EVALUATE_SPR4UPS_OBJECTIVE 计算 SPR-4UPS 结构参数下的优化目标值
 %
 %   输入：
-%     params — 5×1 向量 [H_mm, h_mm, r1_mm, r2_mm, a_deg, b_deg]
+%     params — 6×1 向量 [H_mm, h_mm, r1_mm, r2_mm, a_deg, b_deg]
 %     k1, k2 — OTI 平均值与 5% 分位数的权重
 %
 %   输出：
@@ -85,9 +85,9 @@ function J = evaluate_spr4ups_objective(params, k1, k2)
     ball_vector = -1 * ball_vector;
 
     % ========== 2. 搜索空间（粗网格） ==========
-    seq_x = (-400 : 20 : 400) * unit_para;
-    seq_y = (-400 : 20 : 400) * unit_para;
-    seq_z = (-1200 : 20 : -650) * unit_para;
+    seq_x = (-400 : 10 : 400) * unit_para;
+    seq_y = (-400 : 10 : 400) * unit_para;
+    seq_z = (-1200 : 10 : -650) * unit_para;
     seq_phi   = deg2rad((-180 : 30 : 180));
     seq_theta = deg2rad((0 : 10 : 30));
     len_x = length(seq_x);
@@ -240,7 +240,7 @@ function J = evaluate_spr4ups_objective(params, k1, k2)
     if best_V <= 0
         J = 1;
         fprintf('[%s] Params=[%.2f,%.2f,%.2f,%.2f,%.2f, %.2f] → No valid cylinder. J=1\n', ...
-            datestr(now, 'HH:MM:SS'), H_mm, h_mm, r1_mm, r2_mm, a_deg, b_deg);
+            string(datetime('now', 'Format', 'HH:mm:ss')), H_mm, h_mm, r1_mm, r2_mm, a_deg, b_deg);
         return;
     end
 
