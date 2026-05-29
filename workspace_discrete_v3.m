@@ -16,7 +16,7 @@ fprintf('>>>= start (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')))
 %--------parameter3--------
 basic_paras = basic_read('parameters.xlsx', 'column', 'M', 'unit', 'm');  % 单位意思是程序中用到的单位
 
-% >>> 自动加载 surrogateopt 优化结果（避免手动输入 parameters.xlsx 时顺序/角度出错）<<<
+% >>> 自动加载 surrogateopt 优化结果 <<<
 use_optimized_params = false;
 
 if use_optimized_params && exist('optimization_result.mat', 'file')
@@ -129,11 +129,11 @@ p_seq = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
 
 % ------search space-------
-seq_x = (-400 : 5 : 400)*unit_para;
-seq_y = (-400 : 5 : 400)*unit_para;
+seq_x = (-400 : 10 : 400)*unit_para;
+seq_y = (-400 : 10 : 400)*unit_para;
 seq_z = (-1200 : 5 : -600)*unit_para;
 seq_phi = deg2rad((-180 : 30 : 180));
-seq_theta = deg2rad((0 : 2 : 30));
+seq_theta = deg2rad((0 : 2 : 20));
 len_x = length(seq_x);
 len_y = length(seq_y);
 len_z = length(seq_z);
