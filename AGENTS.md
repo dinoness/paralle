@@ -1,251 +1,225 @@
-# AGENTS.md — SPR-4UPS 并联机构分析与优化项目
+# AGENTS.md — SPR-4UPS Parallel Mechanism Kinematic Analysis
 
-> 本文件面向 AI 编程助手。若你从未接触过本项目，请先阅读此文件。
+## Project Overview
 
----
+This is a MATLAB project for kinematic modeling, calibration, workspace analysis, force/velocity analysis, and structural parameter optimization of a **SPR-4UPS parallel mechanism** (5-DOF). The mechanism consists of one SPR limb (Spherical-Prismatic-Revolute) and four UPS limbs (Universal-Prismatic-Spherical).
 
-## 1. 项目概述
+All kinematics are formulated using **screw theory** and the **Product of Exponentials (POE)** formula on Lie groups SE(3) / se(3). The primary reference is the included PDF (孔令雨, "并联机构的运动学误差建模及参数可辨识性分析").
 
-本项目是一个基于 MATLAB 的机器人学研究代码库，研究对象为 **SPR-4UPS 并联机构**（5 自由度：3 平移 + 2 转动）。
+**Code language:** MATLAB (all comments and documentation in Chinese).
 
-机构构型：
-- 1 条 SPR 支链（球铰-移动副-转动副），提供 1 个约束
-- 4 条 UPS 支链（万向铰-移动副-球铰），各提供 1 个主动驱动
-
-主要研究内容：
-- 基于螺旋理论（Screw Theory）与 Lie 群 / Lie 代数的运动学建模
-- 运动学正解 / 逆解（指数积公式，POE）
-- 工作空间离散搜索与最大内接圆柱提取
-- 传递性能指标计算（ITI / OTI / LTI / GCI / LCI）
-- 结构参数优化（ surrogateopt / 自定义搜索）
-- 几何误差标定（Levenberg-Marquardt 迭代）
-- 静力学分析与仿真验证
-
----
-
-## 2. 技术栈与运行环境
-
-- **语言**：MATLAB（R2020b 或更高版本推荐）
-- **必需工具箱**：
-  - Parallel Computing Toolbox（大量脚本使用 `parfor` 加速网格搜索）
-  - Optimization Toolbox（`surrogateopt`, `fmincon` 等）
-- **无外部包管理器**：不存在 `pyproject.toml`、`package.json` 或 `requirements.txt`。所有依赖为 MATLAB 内置函数或本项目自研函数。
-- **操作系统**：Windows（开发环境），但代码本身跨平台。
-
----
-
-## 3. 目录结构与代码组织
+## Repository Structure
 
 ```
-.
-├── lib/                    # 核心运动学与标定算法库
-│   ├── parameterize.m              # 由几何参数生成 6×34 旋量参数 p_seq 与零位全局旋量 xi_seq
-│   ├── keni_sol_inverse.m          # 运动学逆解
-│   ├── keni_sol_forward.m          # 运动学正解（Newton-Raphson / LM 迭代）
-│   ├── keni_sol_forward_once.m     # 单次正解（给定关节量求位姿）
-│   ├── jacobian_body.m             # 体坐标雅可比
-│   ├── jacobian_space.m            # 空间坐标雅可比
-│   ├── spr4ups_build_limb_twists.m # 构建各支链关节旋量
-│   ├── build_line_wrench.m         # 构造线力旋量
-│   ├── svd_nullspace.m             # 基于 SVD 的零空间计算
-│   ├── pos2trans.m / trans2pos.m   # 位姿向量 <=> 4×4 齐次变换矩阵
-│   ├── calib_iter_*.m              # 标定迭代相关的矩阵构造与恢复函数
-│   └── ...
-├── lib_math/               # 螺旋理论与 Lie 代数基础数学库
-│   ├── exp_se3.m / log_se3.m       # SE(3) 指数映射与对数映射
-│   ├── exp_so3.m / log_so3.m       # SO(3) 指数映射与对数映射
-│   ├── adjoint_m.m                 # 伴随矩阵
-│   ├── screw_efficiency.m          # 螺旋效率（归一化互易积）
-│   ├── screw_apparent_power.m      # 螺旋视在功率
-│   ├── screw_unitize.m             # 螺旋单位化
-│   ├── recip.m                     # 互易积
-│   ├── Paden_Kahan1/2.m            # Paden-Kahan 子问题求解
-│   └── skew.m                      # 反对称矩阵
-├── lib_para/               # 参数读取
-│   └── basic_read.m                # 从 parameters.xlsx 读取几何参数，支持列选择与单位转换
-├── lib_opt_struct/         # 结构优化与性能指标
-│   ├── evaluate_spr4ups_objective.m # surrogateopt 目标函数（OTI 均值 + 5% 分位数）
-│   └── compute_ltigci.m             # 计算 LTI / GCI / OTI / ITI
-├── lib_calib/              # 标定专用库（当前为空或待扩展）
-├── AI_code/                # AI 辅助生成的代码片段
-│   └── SPR_4UPS_Statics.m          # 基于力雅可比的静力学求解（给定外力求驱动力与约束力）
-├── other/                  # 历史脚本、可视化辅助、测试动画
-│   ├── ArcDraw.m, Circle.m         # 几何绘图类
-│   ├── Workspace.m, Workspace2.m   # 旧版工作空间脚本
-│   ├── kinematics_test.m           # 运动学测试
-│   └── *.gif                       # 生成的演示动画
-├── sim_para_process/       # 与 RecurDyn 仿真对比数据
-│   ├── recurdyn0427.m
-│   ├── no_gravity.csv
-│   └── with_gravity.csv
-├── parameters.xlsx         # 中央参数文件（多列对应不同工况/优化阶段）
-├── optimization_result.mat # 结构优化结果存档
-└── [根目录脚本]            # 见下文“主要入口脚本”
+paralle_/
+├── calibration2/3/4.m        # 运动学标定 (LM 阻尼最小二乘, 第3章)
+├── calibration5.m            # 运动学标定 (总体最小二乘法 TLS, 第4章)
+├── parameter_optimize.m      # 单层参数扫描与性能指标作图
+├── parameter_optimize2.m     # 结构参数优化 (parameter optimization)
+├── parameter_optimize_surrogate.m  # 基于 surrogateopt 的参数优化
+├── workspace_discrete.m/v2/v3.m    # 圆柱工作空间离散搜索 (cylindrical workspace search with OTI/GCI)
+├── Joint_angle_search.m      # 关节角搜索与工作空间可视化
+├── force_analysis_screw.m    # 旋量理论力分析 (screw theory based force analysis)
+├── velocity_static_force.m   # 速度与静力分析
+├── structure_err.m           # 结构误差对位姿影响分析与可视化
+├── scerw_theory.m            # 旋量理论验证
+├── screw_verify.m            # 旋量计算结果验证
+├── keni_sol.m                # 运动学正/逆解验证
+├── controller_verify.m       # 控制器验证
+├── verify_OTI_3prs.m         # 3PRS 机构 OTI 验证
+├── verify_OTI_6ups.m         # 6UPS 机构 OTI 验证
+├── test.m / test_script.m    # 测试脚本
+├── path_add.m                # 路径初始化 (adds all lib dirs to MATLAB path)
+├── parameters.xlsx           # 机构几何参数表 (多列对应不同参数集)
+├── optimization_result.mat   # 优化结果缓存
+├── note.md                   # MATLAB 语法备忘
+│
+├── lib/                      # 核心运动学与标定库
+│   ├── parameterize.m        # 几何参数 → 旋量序列 (p_seq, xi_seq)
+│   ├── keni_sol_forward.m    # 运动学正解 (Newton-Raphson 迭代)
+│   ├── keni_sol_forward_once.m  # 单步正运动学 (POE 正解)
+│   ├── keni_sol_inverse.m    # 运动学逆解 (Paden-Kahan 子问题)
+│   ├── jacobian_body.m       # 物体雅可比
+│   ├── jacobian_space.m      # 空间雅可比
+│   ├── pos2trans.m / trans2pos.m  # 位姿向量 ↔ 齐次变换矩阵
+│   ├── spr4ups_build_limb_twists.m  # 构建支链关节运动旋量
+│   ├── build_line_wrench.m   # 构建线力旋量
+│   ├── svd_nullspace.m       # SVD 零空间
+│   ├── null_rowspace_z.m     # 行空间/零空间分解
+│   ├── transform_matrix_cal.m  # 变换矩阵计算
+│   ├── calib_iter_matrix.m / calib_iter_matrix2.m  # 标定迭代矩阵 Jp_bar
+│   ├── calib_iter_row_space_matrix.m  # 行空间分解 (U, N, V_prep, M)
+│   ├── calib_iter_restore_matrix.m    # 恢复矩阵 (Lambda, Ap)
+│   ├── restore_full_param_increment.m # 参数增量恢复为完整形式
+│   └── rebuild_xi_seq_from_p.m        # p_seq 重建 xi_seq
+│
+├── lib_math/                 # 数学基础库
+│   ├── exp_se3.m / log_se3.m    # SE(3) 指数/对数映射
+│   ├── exp_so3.m / log_so3.m    # SO(3) 指数/对数映射
+│   ├── adjoint_m.m              # 伴随变换
+│   ├── skew.m                   # 反对称矩阵
+│   ├── Paden_Kahan1.m           # PK 子问题 1 (绕单轴旋转)
+│   ├── Paden_Kahan2.m           # PK 子问题 2 (绕两相交轴旋转)
+│   ├── recip.m                  # 互易积
+│   ├── screw_unitize.m          # 旋量单位化
+│   ├── screw_apparent_power.m   # 旋量视在功率
+│   └── screw_efficiency.m       # 旋量效率
+│
+├── lib_para/                 # 参数读写
+│   └── basic_read.m          # 从 Excel 读取机构参数，支持列选择与单位设置
+│
+├── lib_opt_struct/           # 结构优化
+│   ├── compute_ltigci.m      # 计算 LTI, GCI, OTI, ITI 性能指标
+│   └── evaluate_spr4ups_objective.m  # surrogateopt 目标函数
+│
+├── lib_calib/                # 标定辅助库
+│   └── solve_tls.m           # 总体最小二乘法 (TLS) 求解器，增广矩阵 SVD 方法
+│
+├── AI_code/                  # AI 辅助生成代码
+│   └── SPR_4UPS_Statics.m    # SPR-4UPS 静力分析函数
+│
+├── other/                    # 工具/探索/旧版代码
+│   ├── Workspace.m / Workspace2.m   # 旧版工作空间分析
+│   ├── Joint_angle_search_1016.m    # 旧版关节搜索
+│   ├── kinematics_test.m / base_verify.m / view_test.m  # 验证测试
+│   ├── Circle.m / ArcDraw.m         # 绘图辅助
+│   ├── frame_assistant_cal.m        # 坐标系辅助计算
+│   └── t1.m / t2.m                  # 临时测试
+│
+└── sim_para_process/         # RecurDyn 仿真数据处理
+    ├── recurdyn0427.m
+    ├── with_gravity.csv
+    └── no_gravity.csv
 ```
 
-### 主要入口脚本（根目录）
+## No Build System
 
-| 脚本名 | 用途 |
-|--------|------|
-| `workspace_discrete_v3.m` | **核心工作空间分析**：离散网格搜索、含姿态可达空间、最大内接圆柱提取、LTI/GCI/LCI 计算、可视化。大量使用 `parfor`。 |
-| `Joint_angle_search.m` | 球铰链最优倾斜角 `phi` 搜索（以圆柱体积为目标），分多阶段粗搜+细搜。 |
-| `parameter_optimize.m` / `parameter_optimize2.m` / `parameter_optimize_surrogate.m` | 结构参数优化入口，分别对应不同优化策略。 |
-| `calibration2.m` ~ `calibration4.m` | 几何误差标定脚本，迭代辨识结构参数。`calibration4.m` 为最新版，使用 LM 阻尼与行空间分解。 |
-| `velocity_static_force.m` | 静力学与速度映射分析，绘制力矢量图。 |
-| `force_analysis_screw.m` | 基于螺旋理论的 ITI/OTI/LTI/GCI 计算与作图。 |
-| `structure_err.m` | 给定结构误差（如基座铰链点偏移），观察位姿变化。 |
-| `keni_sol.m` | 运动学正逆解的演示与验证脚本。 |
-| `scerw_theory.m` / `screw_verify.m` | 螺旋理论验证与自由度分析。 |
-| `test.m` / `test_script.m` | 临时测试与 AI 生成代码调用示例。 |
-| `path_add.m` | **环境初始化**：将 `lib`, `lib_para`, `lib_math`, `lib_opt_struct`, `lib_calib` 加入 MATLAB 路径。 |
+There is **no build system or package manager**. This is pure MATLAB — each `.m` file is a script or function. To run any analysis, open MATLAB, set the working directory to the project root, and run the desired script. Most scripts call `path_add()` at the top to set up the MATLAB search path, or call `addpath(genpath('./lib'))` directly.
 
----
+## How to Run
 
-## 4. 关键开发约定
+1. Open MATLAB
+2. Set current folder to the project root (`paralle_/`)
+3. Run one of the top-level scripts, e.g.:
+   - `>> workspace_discrete_v3` — workspace analysis
+   - `>> calibration4` — kinematic calibration (Levenberg-Marquardt)
+   - `>> calibration5` — kinematic calibration (Total Least Squares, Chapter 4)
+   - `>> parameter_optimize_surrogate` — structural optimization
+   - `>> structure_err` — structural error visualization
+4. Most scripts call `path_add()` (or equivalent `addpath`) at the top
 
-### 4.1 单位约定（极易出错）
+## Parameter Management
 
-- 全局变量 `unit_para` 控制单位换算：
-  - `unit_para = 0.001` 表示程序内部使用 **米 (m)**，而 Excel 中参数以 **毫米 (mm)** 记录。
-  - `unit_para = 1` 表示程序内部使用 **毫米 (mm)**。
-- `basic_read.m` 支持 `'unit', 'm'` 或 `'unit', 'mm'` 参数，自动完成转换。
-- **角度**：大部分脚本中，位姿向量的角度单位是 **度 (deg)**，但在调用 `pos2trans` 时需显式指定 `'unit', 'rad'`  if 输入为弧度。
+All mechanism geometry is stored in `parameters.xlsx`. The file has **multiple columns** (B, C, …, M), each representing a different parameter set. Columns encode:
 
-### 4.2 参数文件 `parameters.xlsx`
+| Row | Parameter | Unit in Excel |
+|-----|-----------|--------------|
+| 1 | l_max | mm |
+| 2 | l_min | mm |
+| 3 | R1 (base radius, lower platform) | mm |
+| 4 | R2 (base radius, upper platform) | mm |
+| 5 | H (base vertical offset) | mm |
+| 6 | r1 (moving platform radius, lower) | mm |
+| 7 | r2 (moving platform radius, upper) | mm |
+| 8 | h (moving platform vertical offset) | mm |
+| 9 | L_tool (tool length) | mm |
+| 10 | U-joint tilt angle | degrees |
+| 11–15 | Base limb directions θ_b (5 values) | degrees |
+| 16–20 | Moving limb directions θ_m (5 values) | degrees |
+| 21–25 | Initial limb lengths l0 (5 values) | mm |
 
-- 单文件多列管理不同配置：
-  - 列 `B`：默认 / 基础参数
-  - 列 `C`、`D`、`M` 等：不同优化阶段、标定实验或工作空间分析用的参数集。
-- 读取方式：`basic_read('parameters.xlsx', 'column', 'M', 'unit', 'm')`。
-- 修改参数前务必确认当前脚本使用的是哪一列。
-
-### 4.3 MATLAB 路径管理
-
-- 每个主脚本开头通常调用 `path_add()` 或 `addpath(genpath('./lib'))`。
-- **不要在脚本中永久保存路径**（避免 `savepath`），保持项目自包含。
-
-### 4.4 并行计算
-
-- 工作空间搜索大量使用 `parfor`。运行前建议：
-  ```matlab
-  parpool('local', 5);  % 根据 CPU 核心数调整
-  ```
-- `parfor` 循环内部变量必须满足切片变量规则；合并结果通常使用 `cell` + 事后拼接。
-
-### 4.5 代码风格
-
-- **注释语言**：中文为主，部分函数头部使用英文文档字符串。
-- **变量命名**：
-  - 蛇形命名与驼峰命名混用，整体偏向小写+下划线。
-  - 常见缩写：`seq`（序列）、`limb`（支链）、`plant`（平台）、`pos`（位置）、`T_ref`（参考位姿变换矩阵）、`p_seq`（旋量参数矩阵）。
-- **图形输出**：
-  - 统一白色背景：`figure('Color', [1 1 1])`
-  - 常用字体：`Times New Roman`（坐标轴）与 `微软雅黑`（标签）。
-  - 固定配色：`#FF7F50`（基座/珊瑚色）、`#32CD32`（动平台/绿色）、`#4682B4`（支链/钢蓝色）。
-
-### 4.6 版本控制习惯
-
-- 存在大量同名不同版本的文件（如 `workspace_discrete.m`, `v2.m`, `v3.m`）。
-- 旧版本通常保留在根目录或 `other/` 中，**修改前请确认正在编辑的是最新版本**（通常是版本号最大的）。
-- `.gitignore` 忽略了 `/other` 和 `/sim_para_process`，这两个目录下的内容不会被 Git 跟踪。
-
----
-
-## 5. 运行与测试
-
-### 5.1 如何运行一个典型分析
-
-以工作空间分析为例：
-
+Parameters are loaded at runtime via:
 ```matlab
-% 1. 进入项目根目录
-% 2. 在 MATLAB 命令行执行：
-path_add();
-workspace_discrete_v3
+basic_paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'm');
 ```
+Specifying `'unit', 'm'` converts mm (from Excel) to meters internally (`unit_para = 0.001`). Use `'unit', 'mm'` to keep mm.
 
-脚本会自动：
-1. 从 `parameters.xlsx` 读取参数；
-2. 执行离散网格搜索（`parfor` 加速）；
-3. 提取最大内接圆柱；
-4. 计算 LTI / GCI / LCI；
-5. 绘制 3D 散点图与机构简图。
+## Key Conventions
 
-### 5.2 如何运行结构优化
+### Variable Naming
+- `p_seq` — 6×34 screw parameter matrix (exponential coordinates of initial transformations)
+- `xi_seq` — 6×34 zero-configuration global screw coordinates
+- `joint_q` — 6×5 joint variable matrix (one column per limb; SPR limb has 5 DOF, UPS limbs have 6)
+- `T_ref` / `T_cal` — 4×4 homogeneous transformation matrices
+- `Pos_ref_seq` — 5×N pose vector `[x; y; z; φ; θ]` (translations in m, angles in degrees)
+- `B` — 3×5 base joint positions
+- `P_m` — 3×5 moving platform joint positions (in platform frame)
+- `limb_dir` — 5×2 matrix of limb direction angles `[θ_base, θ_move]` in radians
 
-```matlab
-parameter_optimize_surrogate   % 使用 surrogateopt 进行全局优化
-```
+### Unit System
+- Internal calculations: **meters, radians**
+- Excel storage: **mm, degrees**
+- Conversion handled by `basic_read()` via the `unit_para` factor
 
-或：
+### Code Patterns
+- All entry-point scripts begin with `clear` to reset workspace
+- Iterative solvers use `err_max` tolerance (typically `1e-5` to `1e-9`) and `loop_max` safety limits
+- Levenberg-Marquardt damping parameter `lambda` adapts based on gain ratio `eta` (calibration4.m)
+- Total Least Squares via SVD of augmented matrix `[Jp_bar, -err]` (calibration5.m, `solve_tls.m`)
+- Plots use Chinese labels with font `'微软雅黑'` and `'Times New Roman'`, figure size in centimeters
+- Random seeds are set explicitly (e.g., `rng(0313+im)`) for reproducibility
 
-```matlab
-% 手动调用目标函数
-J = evaluate_spr4ups_objective([H_mm, h_mm, r1_mm, r2_mm, a_deg, b_deg], 1.0, 1.0);
-```
+### Screw Theory Convention
+- Twist coordinates: `[ω; v]` (6×1), angular velocity followed by linear velocity
+- Wrench coordinates: `[F; M]` (6×1), force followed by moment
+- Reciprocal product operator: `Omega = [zeros(3,3) eye(3); eye(3) zeros(3,3)]`
+- The SPR limb (limb 1) has joints: R-R-R-P-R (5 DOF)
+- Each UPS limb (limbs 2–5) has joints: R-R-P-R-R-R (6 DOF)
+- Joint axes: `zeta_r = [0;0;1;0;0;0]` (rotation about z), `zeta_p = [0;0;0;0;0;1]` (translation along z)
 
-### 5.3 如何验证运动学
+## Key Algorithms
 
-```matlab
-keni_sol          % 包含正逆解演示
-screw_verify      % 螺旋理论验证
-```
+### Forward Kinematics
+Uses Newton-Raphson iteration on the body Jacobian. The closure constraint is that all five limbs must reach the same platform pose. The Jacobian `J_all` (24×24) relates passive joint velocities across limbs, and the update solves `J_all * Δq_passive = err`.
 
-### 5.4 测试策略
+### Inverse Kinematics
+Closed-form using Paden-Kahan subproblems:
+- **PK1**: rotation about a single axis
+- **PK2**: rotation about two intersecting axes
+Active prismatic joints are solved directly from limb length; passive revolute joints use PK decomposition.
 
-- **无单元测试框架**：本项目为科研代码，未使用 MATLAB Unit Test Framework。
-- 验证方式：
-  - 运行 `screw_verify.m`、`verify_OTI_3prs.m`、`verify_OTI_6ups.m` 等对比脚本；
-  - 将 MATLAB 计算结果与 `sim_para_process/recurdyn0427.m` 中的仿真数据对比；
-  - 检查 `parameterize.m` 生成的 `p_seq` 与手动推导是否一致。
-- 修改核心库（`lib/` 或 `lib_math/`）后，建议依次运行：
-  1. `keni_sol.m` —— 正逆解闭环验证
-  2. `screw_verify.m` —— 螺旋理论一致性
-  3. `workspace_discrete_v3.m` —— 端到端工作空间分析（取极小网格快速验证）
+### Kinematic Calibration
+Two methods are implemented:
 
----
+**LM (calibration4.m, Chapter 3):**
+1. Parameterize geometry into screw parameters `p_seq`
+2. Compute row-space decomposition of the identification Jacobian
+3. Iteratively solve `Jp_bar * Δp = err` with Levenberg-Marquardt damping
+4. Rebuild `xi_seq` from updated `p_seq` each iteration
+5. Recompute forward kinematics and pose error until convergence
 
-## 6. 安全与数值稳定性注意事项
+**TLS (calibration5.m, Chapter 4):**
+1. Same row-space decomposition framework (U, V_prep) to eliminate 92 redundant parameters
+2. Form augmented matrix `C = [Jp_bar, -err]` (m × 113)
+3. SVD of C; extract TLS solution `δp = -v(1:n) / v(n+1)` from last right singular vector
+4. TLS simultaneously minimizes `||[ΔJ, Δr]||_F`, treating both Jacobian and residual as noisy
+5. Fallback to pinv-LS when `σ_n ≈ σ_{n+1}` (degenerate case)
+6. No damping parameter — regularization from SVD truncation
 
-- **奇异位形**：在 Home Position 附近，SPR 支链的 R 关节轴线可能与支链方向平行，导致力雅可比矩阵 `G_matrix` 奇异。`SPR_4UPS_Statics.m` 与 `velocity_static_force.m` 中已加入 `cond` 检查与 `warning`。
-- **标定迭代发散**：`calibration4.m` 使用自适应阻尼 LM 方法，但初始值离真值过远时仍可能不收敛。建议先用小扰动测试。
-- **parfor 中的大矩阵拼接**：`workspace_discrete_v3.m` 等脚本在 `parfor` 中使用动态数组拼接（`[work_space_ang local_ws_ang]`），这在 MATLAB 中可行但通信开销较大。修改时尽量避免在 `parfor` 内频繁改变大矩阵尺寸。
-- **持久变量（persistent）**：`evaluate_spr4ups_objective.m` 使用 `persistent basic_paras_base` 缓存参数读取结果。若 `parameters.xlsx` 内容在 MATLAB 会话期间被修改，需执行 `clear evaluate_spr4ups_objective` 才能重新加载。
+### Performance Indices
+- **LTI** (Local Transmission Index) — local force/motion transmission quality
+- **GCI** (Global Constraint Index) — constraint performance
+- **OTI** (Output Transmission Index) — output motion transmission efficiency
+- **ITI** (Input Transmission Index) — input transmission efficiency
+These are computed by solving for TWS (Transmission Wrench Screw), OTS (Output Twist Screw), and SC (Constraint Screw) at each pose.
 
----
+## Dependencies
 
-## 7. 快速参考：常用函数接口
+- **MATLAB** (R2019b or later recommended — uses `readtable`, `deg2rad`, `surrogateopt`)
+  - Optimization Toolbox (for `surrogateopt` in `parameter_optimize_surrogate.m`)
+  - Statistics and Machine Learning Toolbox (used in some scripts)
+  - No other toolboxes required for core kinematics
+- **parameters.xlsx** must be present in the project root
+- No external MATLAB toolboxes or MEX files
+- The `lib_calib/` directory contains the TLS solver (`solve_tls.m`)
 
-```matlab
-% 参数化
-[p_seq, xi_seq] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+## Git Workflow
 
-% 逆解
-joint_q = keni_sol_inverse(T_ref, B, l0_seq, P_m, p_seq);
+- Branch: `main`
+- No CI/CD configured
+- Commit messages are short English descriptions (e.g., "calib_start", "joint_angle_search", "para_opt_o1")
+- `.gitignore` excludes `other/` and `sim_para_process/` directories (note: these are already tracked but future additions there are ignored)
 
-% 正解（迭代）
-[T, joint_q] = keni_sol_forward(joint_q0, p_seq, err_max);
+## External Simulation Data
 
-% 位姿向量 <-> 变换矩阵
-T = pos2trans([x; y; z; phi; theta], B, 'unit', 'rad');
-pos = trans2pos(T);
-
-% 性能指标
-[LTI, GCI, OTI, ITI] = compute_ltigci(T_ref, B, l0_seq, P_m, p_seq);
-
-% 参数读取
-paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'm');
-```
-
----
-
-## 8. 扩展与修改建议
-
-- **新增标定算法**：建议放入 `lib_calib/`，并在根目录新建 `calibrationX.m` 作为入口。
-- **新增性能指标**：在 `lib_opt_struct/` 中新增函数，保持输入接口与 `compute_ltigci.m` 一致（`T_ref, B, l0_seq, P_m, p_seq`）。
-- **新增数学工具**：在 `lib_math/` 中新增，确保函数头部注释包含输入输出维度说明。
-- **修改 `parameters.xlsx` 列结构时**：务必同步更新 `lib_para/basic_read.m` 的读取范围（`range_start`, `range_end`）与 `table2array` 列映射逻辑。
-
----
-
-*最后更新：2026-05-29*
+`sim_para_process/` contains scripts for processing RecurDyn multi-body dynamics simulation output (CSV files with/without gravity). This is used to validate analytical models against numerical simulation.

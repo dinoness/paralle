@@ -1,8 +1,8 @@
 function [T_actual, joint_q_] = keni_sol_forward(joint_q, p_seq, err_max)
 % p_seq __ line 螺旋量维数 = 6; colum 各轴排列 = 34 % 1-6,7-13,14-20,21-27,28-34
 % joint_q __ line 单轴参数 = 6; colum 总共轴数 = 5 %
-if(~exist('err','var'))
-    err_max = 1e-8;  % 如果未出现该变量，则对其进行赋值
+if ~exist('err_max','var') || isempty(err_max)
+    err_max = 1e-8;
 end
 
 T_actual = zeros(4, 4);
@@ -218,7 +218,7 @@ end
 % ylabel('动平台位姿误差', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
 
 if err_list(end) > 2
-    disp(err_list(end));
+    % disp(err_list(end));
     error("--- 运动学正解未收敛 ---");
 end
 
