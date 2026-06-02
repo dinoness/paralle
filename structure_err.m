@@ -3,7 +3,7 @@ clear
 flag_plot = 1;
 
 path_add();
-basic_paras = basic_read('parameters.xlsx', 'column', 'D');
+basic_paras = basic_read('parameters.xlsx', 'column', 'B');
 l_max = basic_paras.l_max;
 l_min = basic_paras.l_min;
 R1 = basic_paras.R1;

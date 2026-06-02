@@ -1,43 +1,67 @@
 % 参考文献：c02 并联机构的运动学误差建模及参数可辨识性分析_孔令雨
 clear
-addpath(genpath('./lib'));
+path_add();
+fprintf('>>>= start (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 
-unit_para = 0.001;  % 0.001表示m，1表示mm
+
 %% 参数集
+basic_paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'm');  % 单位意思是程序中用到的单位
+l_max = basic_paras.l_max;
+l_min = basic_paras.l_min;
+R1 = basic_paras.R1;
+R2 = basic_paras.R2;
+H = basic_paras.H;
+r1 = basic_paras.r1;
+r2 = basic_paras.r2;
+h = basic_paras.h;
+L_tool = basic_paras.L_tool;
+limb_dir = basic_paras.limb_dir;
+B = basic_paras.B;
+P_m = basic_paras.P_m;
+l0_seq = basic_paras.l0_seq;
+joint_u_angle_tilt = basic_paras.joint_u_angle_tilt;
+unit_para = basic_paras.unit_para;
+
+
+
+
+
+
 %--------struct parameter--------
-T = readtable('parameters.xlsx', 'Range', 'A2:B12');
-paras = table2array(T(:, 2));
-l_max = paras(1)*unit_para;
-l_min = paras(2)*unit_para;  % 670
-R1 = paras(3)*unit_para;  % 550
-R2 = paras(4)*unit_para;  % 500
-H = paras(5)*unit_para;  % 0
-r1 = paras(6)*unit_para;  % 100
-r2 = paras(7)*unit_para;  % 80
-h = paras(8)*unit_para;  % 10
+% T = readtable('parameters.xlsx', 'Range', 'A2:B12');
+% unit_para = 0.001;  % 0.001表示m，1表示mm
+% paras = table2array(T(:, 2));
+% l_max = paras(1)*unit_para;
+% l_min = paras(2)*unit_para;  % 670
+% R1 = paras(3)*unit_para;  % 550
+% R2 = paras(4)*unit_para;  % 500
+% H = paras(5)*unit_para;  % 0
+% r1 = paras(6)*unit_para;  % 100
+% r2 = paras(7)*unit_para;  % 80
+% h = paras(8)*unit_para;  % 10
 
-limb_dir = [pi/2; 7*pi/6; -pi/6; pi/6; 5*pi/6];
-B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
-B2 = [R1*cos(7*pi/6); R1*sin(7*pi/6); 0];
-B3 = [R1*cos(-pi/6);  R1*sin(-pi/6);  0];
-B4 = [R2*cos(pi/6);   R2*sin(pi/6);   H];
-B5 = [R2*cos(5*pi/6); R2*sin(5*pi/6); H];
-B = [B1 B2 B3 B4 B5];
+% limb_dir = [pi/2; 7*pi/6; -pi/6; pi/6; 5*pi/6];
+% B1 = [R1*cos(pi/2);   R1*sin(pi/2);   0];
+% B2 = [R1*cos(7*pi/6); R1*sin(7*pi/6); 0];
+% B3 = [R1*cos(-pi/6);  R1*sin(-pi/6);  0];
+% B4 = [R2*cos(pi/6);   R2*sin(pi/6);   H];
+% B5 = [R2*cos(5*pi/6); R2*sin(5*pi/6); H];
+% B = [B1 B2 B3 B4 B5];
 
-% move plant parameter
-P1_m = [r1*cos(pi/2);   r1*sin(pi/2);   0];
-P2_m = [r1*cos(7*pi/6); r1*sin(7*pi/6); 0];
-P3_m = [r1*cos(-pi/6);  r1*sin(-pi/6);  0];
-P4_m = [r2*cos(pi/6);   r2*sin(pi/6);   h];
-P5_m = [r2*cos(5*pi/6); r2*sin(5*pi/6); h];
-P_m = [P1_m P2_m P3_m P4_m P5_m];
+% % move plant parameter
+% P1_m = [r1*cos(pi/2);   r1*sin(pi/2);   0];
+% P2_m = [r1*cos(7*pi/6); r1*sin(7*pi/6); 0];
+% P3_m = [r1*cos(-pi/6);  r1*sin(-pi/6);  0];
+% P4_m = [r2*cos(pi/6);   r2*sin(pi/6);   h];
+% P5_m = [r2*cos(5*pi/6); r2*sin(5*pi/6); h];
+% P_m = [P1_m P2_m P3_m P4_m P5_m];
 P_v = zeros(3, 5);  % 只变换了方向，没变换起点
 P = zeros(3, 5);    % 末端点坐标
 
 
-l0 = 600*unit_para;  % 默认初始支链长度
-l0_seq = [l0;l0;l0;l0;l0];
-joint_u_angle_tilt = 155 / 180 * pi;
+% l0 = 600*unit_para;  % 默认初始支链长度
+% l0_seq = [l0;l0;l0;l0;l0];
+% joint_u_angle_tilt = 155 / 180 * pi;
 % -----end-struct-parameter------
 
 err_max = 1e-5;
@@ -153,7 +177,10 @@ while err_cur > err_max
     if calib_loop > loop_max
         break;
     end
-    fprintf("loop = %d\n", calib_loop);
+    
+    if(rem(calib_loop, 10) == 0)
+        fprintf("loop = %d\n", calib_loop);
+    end
 end
 
 fig = figure('Color', [1 1 1]);

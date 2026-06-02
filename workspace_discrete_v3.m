@@ -14,7 +14,7 @@ R_limit_blue = 0.1;
 path_add()
 fprintf('>>>= start (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 %--------parameter3--------
-basic_paras = basic_read('parameters.xlsx', 'column', 'M', 'unit', 'm');  % 单位意思是程序中用到的单位
+basic_paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'm');  % 单位意思是程序中用到的单位
 
 % >>> 自动加载 surrogateopt 优化结果 <<<
 use_optimized_params = false;
