@@ -41,71 +41,13 @@ err_max = 2e-5;
 keni_forward_err_max = 1e-8;
 loop_max = 50;
 para_err_std = 0.0005;  % 制造误差标准差（m/rad），模拟真实参数与名义参数的偏差
-noise_measure_std = 5e-6;  % 跟踪仪误差5um/m
-a_dis = 1e-5;
+noise_measure_std = 2e-5;  % 跟踪仪误差5um/m
+
 
 % ----- input data ------
-% 参考序列生成
-% ==============pos_seq_v2
-x_seq = [-100 0 100] * unit_para;
-y_seq = [-100 0 100] * unit_para;
-z_seq = [-900 -1000] * unit_para;
-phi_seq = deg2rad(-120 : 120 : 120); 
-theta_seq = deg2rad([0 5 10]);
-Pos_ref_seq = zeros(5, 3*3*3*3*2);
-for ix = 1:length(x_seq)
-    for iy = 1:length(y_seq)
-        for iz = 1:length(z_seq)
-            for iphi = 1:length(phi_seq)
-                for itheta = 1:length(theta_seq)
-                    Pos_ref_seq(:, (ix-1)*54+(iy-1)*18+(iz-1)*9+(iphi-1)*3+(itheta)) = [x_seq(ix); y_seq(iy); z_seq(iz); phi_seq(iphi); theta_seq(itheta)];
-                end
-            end
-        end
-    end
-end
-
-x_valid_seq = 200 * unit_para * (rand(3, 1) - 0.5);
-y_valid_seq = 200 * unit_para * (rand(3, 1) - 0.5);
-z_valid_seq = (-900 + 100 * rand(3, 1)) * unit_para;
-phi_valid_seq = deg2rad(300 * (rand(3, 1) - 0.5)); 
-theta_valid_seq = deg2rad(10 * (rand(3, 1)));
-Pos_valid_seq = zeros(5, 3*3*3*3*2);
-for ix = 1:length(x_valid_seq)
-    for iy = 1:length(y_valid_seq)
-        for iz = 1:length(z_valid_seq)
-            for iphi = 1:length(phi_valid_seq)
-                for itheta = 1:length(theta_valid_seq)
-                    Pos_ref_seq(:, (ix-1)*54+(iy-1)*18+(iz-1)*9+(iphi-1)*3+(itheta)) = [x_valid_seq(ix); y_valid_seq(iy); z_valid_seq(iz); phi_valid_seq(iphi); theta_valid_seq(itheta)];
-                end
-            end
-        end
-    end
-end
-
-% ==============pos_seq_v1
-% x_seq = [-100 0 100] * unit_para;
-% y_seq = [-100 0 100] * unit_para;
-% z_seq = [-800 -850 -900] * unit_para;
-% theta_seq = deg2rad([0 5 10]);
-% Pos_ref_seq = zeros(5, 3*3*3*3);
-% for ix = 1:3
-%     for iy = 1:3
-%         for iz = 1:3
-%             for itheta = 1:3
-%                 Pos_ref_seq(:, (ix-1)*27+(iy-1)*9+(iz-1)*3+(itheta)) = [x_seq(ix); y_seq(iy); z_seq(iz); 0; theta_seq(itheta)];
-%             end
-%         end
-%     end
-% end
-% 仿真测量数据通过以下流程生成：
-%   名义逆解(关节指令) → 真实模型正解(含制造误差) → 输出位姿(模拟测量值)
-% 与直接对位姿加扰动不同，此方法更真实地反映参数误差在位姿空间中的传播
-% Pos_m_seq = [0.01;-0.01;-600.02;0.001;-0.001];  % line=5 colum=n
-% Pos_ref_seq = [0;30;-600;0;10];  % line=5 colum=n  角度的单位是° **一列为一组**
-seq_len = length(Pos_ref_seq(1, :));
-Pos_err_seq = zeros(5, seq_len);  % 位姿估计误差，优化的目标
-Pos_delta_seq = zeros(5, seq_len);  % 位姿扰动序列
+[Pos_ref_seq, Pos_valid_seq] = calib_seq_generate(unit_para);
+seq_len = size(Pos_ref_seq, 2);
+valid_len = size(Pos_valid_seq, 2);
 % ----- end input data ------
 
 %% 标定步骤
@@ -120,6 +62,9 @@ T_cal_seq = zeros(4, 4, seq_len);
 T_measure_seq = zeros(4, 4, seq_len);
 joint_seq_iter = zeros(6, 5, seq_len);
 err_seq_iter = zeros(6*seq_len, 1);
+
+T_measure_valid_seq = zeros(4, 4, valid_len);
+joint_valid_seq = zeros(6, 5, valid_len);
 p_seq_iter = p_seq_nom;  % 结构参数序列
 xi_seq_iter = xi_seq_nom;
 
@@ -140,9 +85,7 @@ for im = 1 : seq_len
     Pc_world_noisy = Pc_world(1:3, :) + noise_measure_std * randn(3, 3);
     T_M_world_noisy = three_pts2trans(Pc_world_noisy(:,1), Pc_world_noisy(:,2), Pc_world_noisy(:,3));
     T_measure_seq(:,:,im) = T_M_world_noisy / T_platform2calib;
-    % rng(0313+im);  % 随机数种子
-    % screw_temp = log_se3(T_cal_seq(:,:,im)) + a_dis * rand(6, 1);
-    % T_measure_seq(:,:,im) = exp_se3(screw_temp);  % 通过添加扰动获得实际位姿（之后用数据替代
+  
 
     % 标定初始关节量（名义逆解值）
     joint_seq_iter(:,:,im) = joint_q_ref;
@@ -152,7 +95,17 @@ for im = 1 : seq_len
 
 end
 
-fprintf("Data generate over. Start identification...\n");
+%% 验证集生成：与标定集相同的噪声添加流程
+for iv = 1 : valid_len
+    T_cal_valid = pos2trans(Pos_valid_seq(:, iv), B, 'unit', 'rad');
+    joint_q_valid = keni_sol_inverse(T_cal_valid, B, l0_seq, P_m, p_seq_nom);
+    [T_measure_valid_seq(:,:,iv), joint_valid_seq(:,:,iv)] = keni_sol_forward(joint_q_valid, p_seq_true, keni_forward_err_max);
+
+    Pc_world = T_measure_valid_seq(:,:,iv) * [Pc; 1, 1, 1];
+    Pc_world_noisy = Pc_world(1:3, :) + noise_measure_std * randn(3, 3);
+    T_M_world_noisy = three_pts2trans(Pc_world_noisy(:,1), Pc_world_noisy(:,2), Pc_world_noisy(:,3));
+    T_measure_valid_seq(:,:,iv) = T_M_world_noisy / T_platform2calib;
+end
 
 %% 引入真实位姿，判断误差是否小于容差，是则结束，否则进入迭代
 calib_loop = 0;
@@ -162,6 +115,24 @@ lambda = 1e-1;
 
 err_cur = norm(err_seq_iter);
 err_list(1) = err_cur;
+
+%% 标定前验证集残差（名义参数 p_seq_nom）
+err_valid_pre = zeros(6*valid_len, 1);
+dpos_pre = zeros(valid_len, 1);   % 位置误差 (mm)
+dang_pre = zeros(valid_len, 1);   % 姿态误差 (°)
+for iv = 1 : valid_len
+    [T_cal_valid, ~] = keni_sol_forward(joint_valid_seq(:,:,iv), p_seq_nom, keni_forward_err_max);
+    err_valid_pre(6*(iv-1)+1 : 6*iv) = log_se3(T_measure_valid_seq(:,:,iv) / T_cal_valid);
+    pos_meas = trans2pos(T_measure_valid_seq(:,:,iv));
+    pos_cal  = trans2pos(T_cal_valid);
+    dpos_pre(iv) = norm(pos_meas(1:3) - pos_cal(1:3)) / unit_para;
+    z_meas = T_measure_valid_seq(1:3, 3, iv);
+    z_cal  = T_cal_valid(1:3, 3);
+    dang_pre(iv) = rad2deg(acos(max(min(dot(z_meas, z_cal), 1), -1)));
+end
+fprintf("验证集标定前 ——\n pos:  mean=%.4f  max=%.4f  rmse=%.4f mm, \n ang:  mean=%.4f  max=%.4f  rmse=%.4f°\n", ...
+    mean(dpos_pre), max(dpos_pre), rms(dpos_pre), mean(dang_pre), max(dang_pre), rms(dang_pre));
+
 while err_cur > err_max
     [U, N, V_prep, M] = calib_iter_row_space_matrix(xi_seq_iter);
     % size(U{1})
@@ -220,6 +191,47 @@ while err_cur > err_max
     
 end
 
+%% 标定后验证集残差（标定后参数 p_seq_iter）
+err_valid_post = zeros(6*valid_len, 1);
+dpos_post = zeros(valid_len, 1);   % 位置误差 (mm)
+dang_post = zeros(valid_len, 1);   % 姿态误差 (°)
+for iv = 1 : valid_len
+    [T_cal_valid, ~] = keni_sol_forward(joint_valid_seq(:,:,iv), p_seq_iter, keni_forward_err_max);
+    err_valid_post(6*(iv-1)+1 : 6*iv) = log_se3(T_measure_valid_seq(:,:,iv) / T_cal_valid);
+    pos_meas = trans2pos(T_measure_valid_seq(:,:,iv));
+    pos_cal  = trans2pos(T_cal_valid);
+    dpos_post(iv) = norm(pos_meas(1:3) - pos_cal(1:3)) / unit_para;
+    z_meas = T_measure_valid_seq(1:3, 3, iv);
+    z_cal  = T_cal_valid(1:3, 3);
+    dang_post(iv) = rad2deg(acos(max(min(dot(z_meas, z_cal), 1), -1)));
+end
+fprintf("验证集标定后 ——\n pos:  mean=%.4f  max=%.4f  rmse=%.4f mm, \n ang:  mean=%.4f  max=%.4f  rmse=%.4f°\n", ...
+    mean(dpos_post), max(dpos_post), rms(dpos_post), mean(dang_post), max(dang_post), rms(dang_post));
+
+%% 标定前后验证集残差对比图
+fig_val = figure('Color', [1 1 1]);
+tiledlayout(2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+nexttile;
+plot(1:valid_len, dpos_pre, 'Color', [0.7 0.7 0.7], 'LineWidth', 1.0); hold on;
+plot(1:valid_len, dpos_post, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.0);
+yline(mean(dpos_pre), '--', 'Color', [0.5 0.5 0.5], 'LineWidth', 0.8);
+yline(mean(dpos_post), '--', 'Color', [0.85 0.33 0.10], 'LineWidth', 0.8);
+ylabel('Δd (mm)', 'FontSize', 12, 'FontName', 'Times New Roman');
+legend({'标定前', '标定后'}, 'FontSize', 11, 'FontName', '微软雅黑', 'Location', 'best');
+set(gca, 'FontSize', 11, 'FontName', 'Times New Roman', 'LineWidth', 1.0);
+grid on; box on;
+
+nexttile;
+plot(1:valid_len, dang_pre, 'Color', [0.7 0.7 0.7], 'LineWidth', 1.0); hold on;
+plot(1:valid_len, dang_post, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.0);
+yline(mean(dang_pre), '--', 'Color', [0.5 0.5 0.5], 'LineWidth', 0.8);
+yline(mean(dang_post), '--', 'Color', [0.85 0.33 0.10], 'LineWidth', 0.8);
+xlabel('Valid pos labels', 'FontSize', 12, 'FontName', '微软雅黑');
+ylabel('Δθ (°)', 'FontSize', 12, 'FontName', 'Times New Roman');
+set(gca, 'FontSize', 11, 'FontName', 'Times New Roman', 'LineWidth', 1.0);
+grid on; box on;
+
 fig = figure('Color', [1 1 1]);
 plot(0:calib_loop, err_list(1:calib_loop+1),'linewidth',1.5)
 set(gca, 'YScale', 'log');  % 对数坐标轴
@@ -229,8 +241,4 @@ set(gcf,'unit','centimeters','position',[10 10 14 8]);
 xlabel('迭代次数', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
 ylabel('残余误差', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
 
-
-% keni_sol_forward_once(joint_seq_iter(:,:,1),p_seq_iter)
-% T_measure_seq(:,:,1)
-% T_cal_seq(:,:,1)
 fprintf('>>>= done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));

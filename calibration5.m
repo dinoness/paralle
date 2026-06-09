@@ -55,40 +55,9 @@ noise_measure_std = 5e-6;  % 跟踪仪误差5um/m
 lambda_damp = 0.01;
 
 % ----- input data ------
-x_seq = [-100 0 100] * unit_para;
-y_seq = [-100 0 100] * unit_para;
-z_seq = [-900 -1000] * unit_para;
-phi_seq = deg2rad(-120 : 120 : 120); 
-theta_seq = deg2rad([0 5 10]);
-Pos_ref_seq = zeros(5, 3*3*3*3*2);
-for ix = 1:length(x_seq)
-    for iy = 1:length(y_seq)
-        for iz = 1:length(z_seq)
-            for iphi = 1:length(phi_seq)
-                for itheta = 1:length(theta_seq)
-                    Pos_ref_seq(:, (ix-1)*54+(iy-1)*18+(iz-1)*9+(iphi-1)*3+(itheta)) = [x_seq(ix); y_seq(iy); z_seq(iz); phi_seq(iphi); theta_seq(itheta)];
-                end
-            end
-        end
-    end
-end
-
-% x_seq = [-100 0 100] * unit_para;
-% y_seq = [-100 0 100] * unit_para;
-% z_seq = [-800 -850 -900] * unit_para;
-% theta_seq = [0 5 10];
-% Pos_ref_seq = zeros(5, 3*3*3*3);
-% for ix = 1:3
-%     for iy = 1:3
-%         for iz = 1:3
-%             for itheta = 1:3
-%                 Pos_ref_seq(:, (ix-1)*27+(iy-1)*9+(iz-1)*3+(itheta)) = [x_seq(ix); y_seq(iy); z_seq(iz); 0; theta_seq(itheta)];
-%             end
-%         end
-%     end
-% end
-seq_len = length(Pos_ref_seq(1, :));
-% ----- end input data ------
+[Pos_ref_seq, Pos_valid_seq] = calib_seq_generate(unit_para);
+seq_len = size(Pos_ref_seq, 2);
+valid_len = size(Pos_valid_seq, 2);
 
 
 %% 标定步骤
@@ -102,6 +71,9 @@ T_cal_seq = zeros(4, 4, seq_len);
 T_measure_seq = zeros(4, 4, seq_len);
 joint_seq_iter = zeros(6, 5, seq_len);
 err_seq_iter = zeros(6*seq_len, 1);
+
+T_measure_valid_seq = zeros(4, 4, valid_len);
+joint_valid_seq = zeros(6, 5, valid_len);
 p_seq_iter = p_seq_nom;
 xi_seq_iter = xi_seq_nom;
 
@@ -130,6 +102,18 @@ for im = 1 : seq_len
     err_seq_iter(6*(im-1)+1 : 6*im) = log_se3(T_measure_seq(:,:,im) / T_cal_seq(:,:,im));
 end
 
+%% 验证集生成：与标定集相同的噪声添加流程
+for iv = 1 : valid_len
+    T_cal_valid = pos2trans(Pos_valid_seq(:, iv), B, 'unit', 'rad');
+    joint_q_valid = keni_sol_inverse(T_cal_valid, B, l0_seq, P_m, p_seq_nom);
+    [T_measure_valid_seq(:,:,iv), joint_valid_seq(:,:,iv)] = keni_sol_forward(joint_q_valid, p_seq_true, keni_forward_err_max);
+
+    Pc_world = T_measure_valid_seq(:,:,iv) * [Pc; 1, 1, 1];
+    Pc_world_noisy = Pc_world(1:3, :) + noise_measure_std * randn(3, 3);
+    T_M_world_noisy = three_pts2trans(Pc_world_noisy(:,1), Pc_world_noisy(:,2), Pc_world_noisy(:,3));
+    T_measure_valid_seq(:,:,iv) = T_M_world_noisy / T_platform2calib;
+end
+
 
 %% RTLS 迭代标定
 calib_loop = 0;
@@ -139,6 +123,24 @@ method_list = cell(loop_max, 1);
 lambda_list = zeros(loop_max, 1);
 
 err_cur = norm(err_seq_iter);
+
+%% 标定前验证集残差（名义参数 p_seq_nom）
+err_valid_pre = zeros(6*valid_len, 1);
+dpos_pre = zeros(valid_len, 1);
+dang_pre = zeros(valid_len, 1);
+for iv = 1 : valid_len
+    [T_cal_valid, ~] = keni_sol_forward(joint_valid_seq(:,:,iv), p_seq_nom, keni_forward_err_max);
+    err_valid_pre(6*(iv-1)+1 : 6*iv) = log_se3(T_measure_valid_seq(:,:,iv) / T_cal_valid);
+    pos_meas = trans2pos(T_measure_valid_seq(:,:,iv));
+    pos_cal  = trans2pos(T_cal_valid);
+    dpos_pre(iv) = norm(pos_meas(1:3) - pos_cal(1:3)) / unit_para;
+    z_meas = T_measure_valid_seq(1:3, 3, iv);
+    z_cal  = T_cal_valid(1:3, 3);
+    dang_pre(iv) = rad2deg(acos(max(min(dot(z_meas, z_cal), 1), -1)));
+end
+fprintf("验证集标定前 ——\n pos:  mean=%.4f  max=%.4f  rmse=%.4f mm, \n ang:  mean=%.4f  max=%.4f  rmse=%.4f°\n", ...
+    mean(dpos_pre), max(dpos_pre), rms(dpos_pre), mean(dang_pre), max(dang_pre), rms(dang_pre));
+
 while err_cur > err_max
     [U, N, V_prep, M] = calib_iter_row_space_matrix(xi_seq_iter);
     [Lambda, Ap] = calib_iter_restore_matrix(p_seq_iter);
@@ -229,6 +231,47 @@ while err_cur > err_max
 end
 
 fprintf('>>>>> RTLS 标定完成: %d 次迭代, 最终误差 = %.3e <<<<<\n', calib_loop, err_cur);
+
+%% 标定后验证集残差（标定后参数 p_seq_iter）
+err_valid_post = zeros(6*valid_len, 1);
+dpos_post = zeros(valid_len, 1);
+dang_post = zeros(valid_len, 1);
+for iv = 1 : valid_len
+    [T_cal_valid, ~] = keni_sol_forward(joint_valid_seq(:,:,iv), p_seq_iter, keni_forward_err_max);
+    err_valid_post(6*(iv-1)+1 : 6*iv) = log_se3(T_measure_valid_seq(:,:,iv) / T_cal_valid);
+    pos_meas = trans2pos(T_measure_valid_seq(:,:,iv));
+    pos_cal  = trans2pos(T_cal_valid);
+    dpos_post(iv) = norm(pos_meas(1:3) - pos_cal(1:3)) / unit_para;
+    z_meas = T_measure_valid_seq(1:3, 3, iv);
+    z_cal  = T_cal_valid(1:3, 3);
+    dang_post(iv) = rad2deg(acos(max(min(dot(z_meas, z_cal), 1), -1)));
+end
+fprintf("验证集标定后 ——\n pos:  mean=%.4f  max=%.4f  rmse=%.4f mm, \n ang:  mean=%.4f  max=%.4f  rmse=%.4f°\n", ...
+    mean(dpos_post), max(dpos_post), rms(dpos_post), mean(dang_post), max(dang_post), rms(dang_post));
+
+%% 标定前后验证集残差对比图
+fig_val = figure('Color', [1 1 1]);
+tiledlayout(2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+nexttile;
+plot(1:valid_len, dpos_pre, 'Color', [0.7 0.7 0.7], 'LineWidth', 1.0); hold on;
+plot(1:valid_len, dpos_post, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.0);
+yline(mean(dpos_pre), '--', 'Color', [0.5 0.5 0.5], 'LineWidth', 0.8);
+yline(mean(dpos_post), '--', 'Color', [0.85 0.33 0.10], 'LineWidth', 0.8);
+ylabel('\Deltad (mm)', 'FontSize', 12, 'FontName', 'Times New Roman');
+legend({'标定前', '标定后'}, 'FontSize', 11, 'FontName', '微软雅黑', 'Location', 'best');
+set(gca, 'FontSize', 11, 'FontName', 'Times New Roman', 'LineWidth', 1.0);
+grid on; box on;
+
+nexttile;
+plot(1:valid_len, dang_pre, 'Color', [0.7 0.7 0.7], 'LineWidth', 1.0); hold on;
+plot(1:valid_len, dang_post, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.0);
+yline(mean(dang_pre), '--', 'Color', [0.5 0.5 0.5], 'LineWidth', 0.8);
+yline(mean(dang_post), '--', 'Color', [0.85 0.33 0.10], 'LineWidth', 0.8);
+xlabel('Valid pos labels', 'FontSize', 12, 'FontName', '微软雅黑');
+ylabel('\Delta\theta (°)', 'FontSize', 12, 'FontName', 'Times New Roman');
+set(gca, 'FontSize', 11, 'FontName', 'Times New Roman', 'LineWidth', 1.0);
+grid on; box on;
 
 
 %% 绘图
