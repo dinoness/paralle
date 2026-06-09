@@ -9,7 +9,7 @@
 % - λ_ext 通过增益比 η 自适应调整（与 calibration4.m 策略一致）
 clear
 path_add();
-fprintf('>>>= calibration5 (RTLS) start (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
+fprintf('>>>= start (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 
 
 %% 参数集
@@ -30,11 +30,23 @@ l0_seq = basic_paras.l0_seq;
 joint_u_angle_tilt = basic_paras.joint_u_angle_tilt;
 unit_para = basic_paras.unit_para;
 
+% 标定板参数（标定靶球中心对于动平台的坐标）
+Rc = 150 * unit_para;
+hc = -50 * unit_para;
+calib_dir = deg2rad([-90 30 150]);
+Pc = [Rc*cos(calib_dir);
+      Rc*sin(calib_dir);
+      hc hc hc];
 
-err_max = 3e-6;
+% 标定靶球三点定义的测量坐标系M → 动平台坐标系的固定变换
+% T_platform_M: X_platform = T_platform_M * X_M
+T_platform2calib = three_pts2trans(Pc(:,1), Pc(:,2), Pc(:,3));
+
+err_max = 2e-5;
 keni_forward_err_max = 1e-8;
 loop_max = 100;
-para_err_std = 0.0010;  % 制造误差标准差（m/rad），模拟真实参数与名义参数的偏差
+para_err_std = 0.0005;  % 制造误差标准差（m/rad），模拟真实参数与名义参数的偏差
+noise_measure_std = 5e-6;  % 跟踪仪误差5um/m
 
 % 外部阻尼参数（类似 LM 的 λ，叠加在 TLS 噪声估计之上）
 % lambda_damp = 0      → 纯 TLS（σ_n(A) > σ_{n+1} 时）
@@ -84,7 +96,7 @@ seq_len = length(Pos_ref_seq(1, :));
 
 % 创建"真实"模型：在名义参数上叠加制造误差
 rng(0313);
-p_seq_true = p_seq_nom + para_err_std * randn(6, 34);
+p_seq_true = p_seq_nom + para_err_std * rand(6, 34);
 
 T_cal_seq = zeros(4, 4, seq_len);
 T_measure_seq = zeros(4, 4, seq_len);
@@ -104,6 +116,12 @@ for im = 1 : seq_len
 
     % 步骤2：固定主动关节（移动副），用真实模型正解得到实际位姿
     [T_measure_seq(:,:,im), ~] = keni_sol_forward(joint_q_ref, p_seq_true, keni_forward_err_max);
+
+    % 标定靶球在世界系下的坐标 + 高斯噪声 → 重构含噪位姿
+    Pc_world = T_measure_seq(:,:,im) * [Pc; 1, 1, 1];          % 4×3，末行全1
+    Pc_world_noisy = Pc_world(1:3, :) + noise_measure_std * randn(3, 3);
+    T_M_world_noisy = three_pts2trans(Pc_world_noisy(:,1), Pc_world_noisy(:,2), Pc_world_noisy(:,3));
+    T_measure_seq(:,:,im) = T_M_world_noisy / T_platform2calib;
 
     % 标定初始关节量（名义逆解值）
     joint_seq_iter(:,:,im) = joint_q_ref;
@@ -256,3 +274,5 @@ title('阻尼自适应', 'FontSize', 14, 'FontName', '微软雅黑');
 grid on;
 
 set(gcf, 'unit', 'centimeters', 'position', [10 10 30 8]);
+
+fprintf('>>>= done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));

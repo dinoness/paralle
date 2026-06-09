@@ -23,16 +23,30 @@ P_m = basic_paras.P_m;
 l0_seq = basic_paras.l0_seq;
 joint_u_angle_tilt = basic_paras.joint_u_angle_tilt;
 unit_para = basic_paras.unit_para;
+
+% 标定板参数（标定靶球中心对于动平台的坐标）
+Rc = 150 * unit_para;
+hc = -50 * unit_para;
+calib_dir = deg2rad([-90 30 150]);
+Pc = [Rc*cos(calib_dir);
+      Rc*sin(calib_dir);
+      hc hc hc];
+
+% 标定靶球三点定义的测量坐标系M → 动平台坐标系的固定变换
+% T_platform_M: X_platform = T_platform_M * X_M
+T_platform2calib = three_pts2trans(Pc(:,1), Pc(:,2), Pc(:,3));
 % -----end-struct-parameter------
 
-err_max = 3e-6;
+err_max = 2e-5;
 keni_forward_err_max = 1e-8;
-loop_max = 100;
-para_err_std = 0.0010;  % 制造误差标准差（m/rad），模拟真实参数与名义参数的偏差
+loop_max = 50;
+para_err_std = 0.0005;  % 制造误差标准差（m/rad），模拟真实参数与名义参数的偏差
+noise_measure_std = 5e-6;  % 跟踪仪误差5um/m
 a_dis = 1e-5;
 
 % ----- input data ------
 % 参考序列生成
+% ==============pos_seq_v2
 x_seq = [-100 0 100] * unit_para;
 y_seq = [-100 0 100] * unit_para;
 z_seq = [-900 -1000] * unit_para;
@@ -51,6 +65,25 @@ for ix = 1:length(x_seq)
     end
 end
 
+x_valid_seq = 200 * unit_para * (rand(3, 1) - 0.5);
+y_valid_seq = 200 * unit_para * (rand(3, 1) - 0.5);
+z_valid_seq = (-900 + 100 * rand(3, 1)) * unit_para;
+phi_valid_seq = deg2rad(300 * (rand(3, 1) - 0.5)); 
+theta_valid_seq = deg2rad(10 * (rand(3, 1)));
+Pos_valid_seq = zeros(5, 3*3*3*3*2);
+for ix = 1:length(x_valid_seq)
+    for iy = 1:length(y_valid_seq)
+        for iz = 1:length(z_valid_seq)
+            for iphi = 1:length(phi_valid_seq)
+                for itheta = 1:length(theta_valid_seq)
+                    Pos_ref_seq(:, (ix-1)*54+(iy-1)*18+(iz-1)*9+(iphi-1)*3+(itheta)) = [x_valid_seq(ix); y_valid_seq(iy); z_valid_seq(iz); phi_valid_seq(iphi); theta_valid_seq(itheta)];
+                end
+            end
+        end
+    end
+end
+
+% ==============pos_seq_v1
 % x_seq = [-100 0 100] * unit_para;
 % y_seq = [-100 0 100] * unit_para;
 % z_seq = [-800 -850 -900] * unit_para;
@@ -80,7 +113,8 @@ Pos_delta_seq = zeros(5, seq_len);  % 位姿扰动序列
 
 % 创建"真实"模型：在名义参数上叠加制造误差
 rng(0313);
-p_seq_true = p_seq_nom + para_err_std * randn(6, 34);
+% p_seq_true = p_seq_nom + para_err_std * randn(6, 34);
+p_seq_true = p_seq_nom + para_err_std * rand(6, 34);
 
 T_cal_seq = zeros(4, 4, seq_len);
 T_measure_seq = zeros(4, 4, seq_len);
@@ -100,6 +134,12 @@ for im = 1 : seq_len
 
     % 步骤2：固定主动关节（移动副），用真实模型正解得到实际位姿
     [T_measure_seq(:,:,im), ~] = keni_sol_forward(joint_q_ref, p_seq_true, keni_forward_err_max);
+
+    % 标定靶球在世界系下的坐标 + 高斯噪声 → 重构含噪位姿
+    Pc_world = T_measure_seq(:,:,im) * [Pc; 1, 1, 1];          % 4×3，末行全1
+    Pc_world_noisy = Pc_world(1:3, :) + noise_measure_std * randn(3, 3);
+    T_M_world_noisy = three_pts2trans(Pc_world_noisy(:,1), Pc_world_noisy(:,2), Pc_world_noisy(:,3));
+    T_measure_seq(:,:,im) = T_M_world_noisy / T_platform2calib;
     % rng(0313+im);  % 随机数种子
     % screw_temp = log_se3(T_cal_seq(:,:,im)) + a_dis * rand(6, 1);
     % T_measure_seq(:,:,im) = exp_se3(screw_temp);  % 通过添加扰动获得实际位姿（之后用数据替代
@@ -112,6 +152,7 @@ for im = 1 : seq_len
 
 end
 
+fprintf("Data generate over. Start identification...\n");
 
 %% 引入真实位姿，判断误差是否小于容差，是则结束，否则进入迭代
 calib_loop = 0;
@@ -169,13 +210,14 @@ while err_cur > err_max
     calib_loop = calib_loop + 1;
     err_cur = err_new;
     err_list(calib_loop+1) = err_cur;
-    if calib_loop > loop_max
-        break;
-    end
     
     if(rem(calib_loop, 10) == 0)
         fprintf("loop = %d\n", calib_loop);
     end
+    if calib_loop >= loop_max
+        break;
+    end
+    
 end
 
 fig = figure('Color', [1 1 1]);
@@ -191,3 +233,4 @@ ylabel('残余误差', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight',
 % keni_sol_forward_once(joint_seq_iter(:,:,1),p_seq_iter)
 % T_measure_seq(:,:,1)
 % T_cal_seq(:,:,1)
+fprintf('>>>= done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
