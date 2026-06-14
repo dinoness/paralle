@@ -318,4 +318,32 @@ grid on;
 
 set(gcf, 'unit', 'centimeters', 'position', [10 10 30 8]);
 
+%% 标定参数导出为 CSV（SI 单位: m, rad）
+[B_out, r1_out, r2_out, l0_out, P_m_out, limb_out, alpha_out] = ...
+    deparameterize(p_seq_iter, P_m, limb_dir);
+
+calib_csv = 'calibrated_params.csv';
+fid = fopen(calib_csv, 'w');
+fprintf(fid, '# SPR-4UPS calibrated kinematic parameters (RTLS)\n');
+fprintf(fid, '# Units: m (length), rad (angle)\n');
+fprintf(fid, '# Columns: param_name, value[, value...]\n');
+fprintf(fid, '# Rows: one parameter per line, label then values\n');
+fprintf(fid, 'r1,%.12f\n', r1_out);
+fprintf(fid, 'r2,%.12f\n', r2_out);
+fprintf(fid, 'alpha,%.12f\n', alpha_out);
+for i = 1:5
+    fprintf(fid, 'l0_%d,%.12f\n', i, l0_out(i));
+end
+for i = 1:5
+    fprintf(fid, 'B_%d,%.12f,%.12f,%.12f\n', i, B_out(1,i), B_out(2,i), B_out(3,i));
+end
+for i = 1:5
+    fprintf(fid, 'Pm_%d,%.12f,%.12f,%.12f\n', i, P_m_out(1,i), P_m_out(2,i), P_m_out(3,i));
+end
+for i = 1:5
+    fprintf(fid, 'limb_dir_%d,%.12f,%.12f\n', i, limb_out(i,1), limb_out(i,2));
+end
+fclose(fid);
+fprintf('标定参数已导出至 %s\n', calib_csv);
+
 fprintf('>>>= done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));

@@ -37,15 +37,19 @@ Pc = [Rc*cos(calib_dir);
 T_platform2calib = three_pts2trans(Pc(:,1), Pc(:,2), Pc(:,3));
 % -----end-struct-parameter------
 
+% ===================================================================
+% Sim Para Config
+% ===================================================================
 err_max = 2e-5;
 keni_forward_err_max = 1e-8;
 loop_max = 50;
 para_err_std = 0.0005;  % 制造误差标准差（m/rad），模拟真实参数与名义参数的偏差
+delta_B_sys = [5; -0; 5] * unit_para;  % 静平台坐标系整体偏移（m），模拟测量坐标系与静平台坐标系的偏差
 noise_measure_std = 2e-5;  % 跟踪仪误差5um/m
 
 
 % ----- input data ------
-[Pos_ref_seq, Pos_valid_seq] = calib_seq_generate(unit_para);
+[Pos_ref_seq, Pos_valid_seq] = calib_seq_generate(unit_para);  % 生成标定数据和验证数据
 seq_len = size(Pos_ref_seq, 2);
 valid_len = size(Pos_valid_seq, 2);
 % ----- end input data ------
@@ -53,10 +57,13 @@ valid_len = size(Pos_valid_seq, 2);
 %% 标定步骤
 [p_seq_nom, xi_seq_nom] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
-% 创建"真实"模型：在名义参数上叠加制造误差
+% 创建"真实"模型：
+%   1. 静平台坐标系整体偏移（模拟测量坐标系与静平台坐标系的对齐偏差）
+%   2. 叠加各结构参数的随机制造误差
 rng(0313);
-% p_seq_true = p_seq_nom + para_err_std * randn(6, 34);
-p_seq_true = p_seq_nom + para_err_std * rand(6, 34);
+B_offset = B + delta_B_sys;  % delta_B_sys 对每列广播
+[p_seq_offset, ~] = parameterize(limb_dir, B_offset, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
+p_seq_true = p_seq_offset + para_err_std * rand(6, 34);
 
 T_cal_seq = zeros(4, 4, seq_len);
 T_measure_seq = zeros(4, 4, seq_len);
@@ -240,5 +247,33 @@ set(gca,'linewidth',1.5,'fontsize',15,'fontname','Times New Roman');
 set(gcf,'unit','centimeters','position',[10 10 14 8]);
 xlabel('迭代次数', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
 ylabel('残余误差', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
+
+[B_out, r1_out, r2_out, l0_out, P_m_out, limb_out, alpha_out] = ...
+    deparameterize(p_seq_iter, P_m, limb_dir);
+
+%% 标定参数导出为 CSV（SI 单位: m, rad）
+calib_csv = 'calibrated_params.csv';
+fid = fopen(calib_csv, 'w');
+fprintf(fid, '# SPR-4UPS calibrated kinematic parameters\n');
+fprintf(fid, '# Units: m (length), rad (angle)\n');
+fprintf(fid, '# Columns: param_name, value[, value...]\n');
+fprintf(fid, '# Rows: one parameter per line, label then values\n');
+fprintf(fid, 'r1,%.12f\n', r1_out);
+fprintf(fid, 'r2,%.12f\n', r2_out);
+fprintf(fid, 'alpha,%.12f\n', alpha_out);
+for i = 1:5
+    fprintf(fid, 'l0_%d,%.12f\n', i, l0_out(i));
+end
+for i = 1:5
+    fprintf(fid, 'B_%d,%.12f,%.12f,%.12f\n', i, B_out(1,i), B_out(2,i), B_out(3,i));
+end
+for i = 1:5
+    fprintf(fid, 'Pm_%d,%.12f,%.12f,%.12f\n', i, P_m_out(1,i), P_m_out(2,i), P_m_out(3,i));
+end
+for i = 1:5
+    fprintf(fid, 'limb_dir_%d,%.12f,%.12f\n', i, limb_out(i,1), limb_out(i,2));
+end
+fclose(fid);
+fprintf('标定参数已导出至 %s\n', calib_csv);
 
 fprintf('>>>= done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
