@@ -1,4 +1,4 @@
-function [LTI, GCI, OTI, ITI] = compute_ltigci(T_ref, B, l0_seq, P_m, p_seq)
+function [LTI, GCI, OTI, ITI, info] = compute_ltigci(T_ref, B, l0_seq, P_m, p_seq)
 % 根据 force_analysis_screw.m 计算指定姿态下的 LTI、GCI、OTI 和 ITI
 %
 % 输入：
@@ -53,10 +53,10 @@ function [LTI, GCI, OTI, ITI] = compute_ltigci(T_ref, B, l0_seq, P_m, p_seq)
         end
     end
     U(:, :, 1) = U1;
-    SI(:, 1) = U1(:, 4);
-    SC(:, 1) = null(U1(:, 1:5)' * Omega);
-    WA1 = Omega * U1(:, 1:5) / (U1(:, 1:5)' * U1(:, 1:5));
-    TR1 = null(WA1' * Omega);
+    SI(:, 1) = U1(:, 4);  % 输入运动旋量 TWS
+    SC(:, 1) = null(U1(:, 1:5)' * Omega);  % 约束力旋量 CWS
+    WA1 = Omega * U1(:, 1:5) / (U1(:, 1:5)' * U1(:, 1:5));  % 驱动力旋量 AWS?
+    TR1 = null(WA1' * Omega);  % 受限运动旋量 RTS
     ST(:, 1) = [U1(4:6,4); cross(B(:, 1), U1(4:6,4))];
 
     % UPS 支链
@@ -115,8 +115,10 @@ function [LTI, GCI, OTI, ITI] = compute_ltigci(T_ref, B, l0_seq, P_m, p_seq)
     LTI = min(ITI, OTI);
 
     % ICI / OCI
-    zeta = screw_efficiency(SC(:, 1), TR1, 'p_cstr', B(:, 1));
-    kappa = screw_efficiency(SC(:, 1), Delta_SO(:, 1), 'p_cstr', B(:, 1));
+    zeta = screw_efficiency(SC(:, 1), TR1, 'p_cstr', B(:, 1));  % ICI
+    kappa = screw_efficiency(SC(:, 1), Delta_SO(:, 1), 'p_cstr', B(:, 1));  % OCI
     GCI = min(zeta, kappa);
 
+    info.TR1 = TR1;
+    info.SC = SC;
 end

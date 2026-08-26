@@ -42,10 +42,10 @@ T_platform2calib = three_pts2trans(Pc(:,1), Pc(:,2), Pc(:,3));
 % ===================================================================
 err_max = 2e-5;
 keni_forward_err_max = 1e-8;
-loop_max = 50;
+loop_max = 100;
 para_err_std = 0.0005;  % 制造误差标准差（m/rad），模拟真实参数与名义参数的偏差
-delta_B_sys = [5; -0; 5] * unit_para;  % 静平台坐标系整体偏移（m），模拟测量坐标系与静平台坐标系的偏差
-noise_measure_std = 2e-5;  % 跟踪仪误差5um/m
+delta_B_sys = [0; -0; 0] * unit_para;  % 静平台坐标系整体偏移（m），模拟测量坐标系与静平台坐标系的偏差
+noise_measure_std = 7e-6;  % 跟踪仪误差5um/m
 
 
 % ----- input data ------
@@ -248,7 +248,7 @@ set(gcf,'unit','centimeters','position',[10 10 14 8]);
 xlabel('迭代次数', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
 ylabel('残余误差', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
 
-[B_out, r1_out, r2_out, l0_out, P_m_out, limb_out, alpha_out] = ...
+[B_out, r1_out, r2_out, l0_out, P_m_out, limb_out, joint_u_angle_tilt_out] = ...
     deparameterize(p_seq_iter, P_m, limb_dir);
 
 %% 标定参数导出为 CSV（SI 单位: m, rad）
@@ -260,7 +260,7 @@ fprintf(fid, '# Columns: param_name, value[, value...]\n');
 fprintf(fid, '# Rows: one parameter per line, label then values\n');
 fprintf(fid, 'r1,%.12f\n', r1_out);
 fprintf(fid, 'r2,%.12f\n', r2_out);
-fprintf(fid, 'alpha,%.12f\n', alpha_out);
+fprintf(fid, 'joint_u_angle_tilt,%.12f\n', joint_u_angle_tilt_out);
 for i = 1:5
     fprintf(fid, 'l0_%d,%.12f\n', i, l0_out(i));
 end

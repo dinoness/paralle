@@ -1,4 +1,5 @@
 % 计算满足一定角度的圆柱工作空间，并计算该圆柱空间的内的OTI，LCI
+% >>>>>所描述的空间是刀具末端点<<<<<
 % =====================注意搜索间隙=====================
 clear
 fig_rotation_show = 0;  % 1开启展示旋转
@@ -781,16 +782,16 @@ fprintf('====================================\n\n');
 %% ------- plot workspace (same as v2) -------
 fig = figure('Color', [1 1 1]);
 % 机构简图
-plot3(B(1, :), B(2, :), B(3, :), 'o', 'Color', '#FF7F50');
+plot3(B(1, :), B(2, :), B(3, :), 'o', 'Color', '#FF7F50', 'LineWidth', 1.5);
 hold on
-plot3(P(1, :), P(2, :), P(3, :), 'o', 'Color', '#32CD32');
+plot3(P(1, :), P(2, :), P(3, :), 'o', 'Color', '#32CD32', 'LineWidth', 1.5);
 B_plot = [B(:,1) B(:,5) B(:,2) B(:,3) B(:,4) B(:,1)];
 P_plot = [P(:,1) P(:,5) P(:,2) P(:,3) P(:,4) P(:,1)];
-plot3(B_plot(1, :), B_plot(2, :), B_plot(3, :), '-', 'Color', '#FF7F50');
-plot3(P_plot(1, :), P_plot(2, :), P_plot(3, :), '-', 'Color', '#32CD32');
+plot3(B_plot(1, :), B_plot(2, :), B_plot(3, :), '-', 'Color', '#FF7F50', 'LineWidth', 1.5);
+plot3(P_plot(1, :), P_plot(2, :), P_plot(3, :), '-', 'Color', '#32CD32', 'LineWidth', 1.5);
 
 for i = 1 : 5
-    plot3([B(1, i) P(1, i)], [B(2, i) P(2, i)], [B(3, i) P(3, i)], '-', 'Color', '#4682B4');
+    plot3([B(1, i) P(1, i)], [B(2, i) P(2, i)], [B(3, i) P(3, i)], '-', 'Color', '#4682B4', 'LineWidth', 1.5);
 end
 scatter3(work_space_up(1,2:end), work_space_up(2,2:end), work_space_up(3,2:end), 2, work_space_up(3,2:end),'filled');
 scatter3(work_space_down(1,2:end), work_space_down(2,2:end), work_space_down(3,2:end), 2, work_space_down(3,2:end),'filled');
@@ -820,6 +821,7 @@ if best_V2 > 0
               [seq_z(best_iz1_2), seq_z(best_iz2_2)], 'b--', 'LineWidth', 0.5);
     end
 end
+set(gca, 'FontSize', 11, 'FontName', 'Times New Roman', 'LineWidth', 1.5);
 
 legend_str = {};
 if best_V > 0
