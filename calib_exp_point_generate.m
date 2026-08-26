@@ -2,7 +2,7 @@ clear
 path_add()
 
 %% 生成刀具空间
-flag = 1;  % 1表示平面空间，2表示球面空间
+flag = 2;  % 1表示平面空间，2表示球面空间
 
 % step_size = 15;
 % x_seq = -105 : step_size : 105;
@@ -104,21 +104,22 @@ end
 fprintf('surface center point num = %d \n', size(surf_points, 2))
 
 %% 输出与可视化
-tool_table = array2table(tool_points.', 'VariableNames', {'x','y','z','phi','theta'});
-surf_table = array2table(surf_points.', 'VariableNames', {'x','y','z','phi','theta'});
+% csv格式：cmd,x,y,z,phi,theta,ticks
+% 每个点：cmd=2, ticks=0；点与点之间插入一行 20,0,0,0,0,0,5000；
+% 最后一行为 2,0,0,-800,0,0,0
 if ~exist('calibration_data', 'dir')
     mkdir('calibration_data');
 end
 if flag == 1
-    writetable(tool_table, fullfile('calibration_data', 'calib_exp_tool_points_planar.csv'));
-    writetable(surf_table, fullfile('calibration_data', 'calib_exp_surf_points_planar.csv'));
+    write_cmd_csv(fullfile('calibration_data', 'calib_exp_tool_points_planar.csv'), tool_points);
+    write_cmd_csv(fullfile('calibration_data', 'calib_exp_surf_points_planar.csv'), surf_points);
 elseif flag == 2
-    writetable(tool_table, fullfile('calibration_data', 'calib_exp_tool_points_spherical.csv'));
-    writetable(surf_table, fullfile('calibration_data', 'calib_exp_surf_points_spherical.csv'));
+    write_cmd_csv(fullfile('calibration_data', 'calib_exp_tool_points_spherical.csv'), tool_points);
+    write_cmd_csv(fullfile('calibration_data', 'calib_exp_surf_points_spherical.csv'), surf_points);
 end
 
 figure('Color', [1 1 1]);
-plot3(surf_points(1,:), surf_points(2,:), surf_points(3,:), '.');
+plot3(surf_points(1,:), surf_points(2,:), surf_points(3,:), '-');
 grid on
 axis equal
 xlabel('x (mm)')
@@ -127,3 +128,17 @@ zlabel('z (mm)')
 title('Surface center points')
 
 fprintf('>>>= done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
+
+function write_cmd_csv(file_name, pts)
+    % pts: 每列 [x; y; z; phi; theta]
+    fid = fopen(file_name, 'w');
+    fprintf(fid, 'cmd,x,y,z,phi,theta,ticks\n');
+    for i = 1 : size(pts, 2)
+        fprintf(fid, '2,%g,%g,%g,%g,%g,0\n', pts(:, i));
+        if i < size(pts, 2)
+            fprintf(fid, '20,0,0,0,0,0,5000\n');
+        end
+    end
+    fprintf(fid, '2,0,0,-800,0,0,0\n');
+    fclose(fid);
+end
