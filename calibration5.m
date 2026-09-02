@@ -1,13 +1,19 @@
-% 参考文献：c02 并联机构的运动学误差建模及参数可辨识性分析_孔令雨
-% L-M求解
+% 参考文献：c02 并联机构的运动学误差建模及参数可辨识性分析_孔令雨 第四章
+% 使用正则化总体最小二乘法 (Regularized Total Least Squares) 进行标定求解
+% 与 calibration4.m（LM 阻尼最小二乘）对应
+%
+% 求解策略（组合正则化）：
+%   x = V * diag(s_i / (s_i² - σ_{n+1}² + λ_ext)) * U' * b
+% - λ_ext = 0 且 TLS 适定时：纯 TLS（式 4-18），对 Jacobian 误差进行补偿
+% - λ_ext > σ_{n+1}²：阻尼最小二乘（类似 LM），保证步长稳健
+% - λ_ext 通过增益比 η 自适应调整（与 calibration4.m 策略一致）
 clear
 path_add();
 fprintf('>>>= start (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 
 
 %% 参数集
-% -----struct-parameter------
-basic_paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'm');  % 单位意思是程序中用到的单位
+basic_paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'm');
 l_max = basic_paras.l_max;
 l_min = basic_paras.l_min;
 R1 = basic_paras.R1;
@@ -35,35 +41,31 @@ Pc = [Rc*cos(calib_dir);
 % 标定靶球三点定义的测量坐标系M → 动平台坐标系的固定变换
 % T_platform_M: X_platform = T_platform_M * X_M
 T_platform2calib = three_pts2trans(Pc(:,1), Pc(:,2), Pc(:,3));
-% -----end-struct-parameter------
 
-% ===================================================================
-% Sim Para Config
-% ===================================================================
 err_max = 2e-5;
 keni_forward_err_max = 1e-8;
 loop_max = 100;
 para_err_std = 0.0005;  % 制造误差标准差（m/rad），模拟真实参数与名义参数的偏差
-delta_B_sys = [0; -0; 0] * unit_para;  % 静平台坐标系整体偏移（m），模拟测量坐标系与静平台坐标系的偏差
-noise_measure_std = 7e-6;  % 跟踪仪误差5um/m
+noise_measure_std = 5e-6;  % 跟踪仪误差5um/m
 
+% 外部阻尼参数（类似 LM 的 λ，叠加在 TLS 噪声估计之上）
+% lambda_damp = 0      → 纯 TLS（σ_n(A) > σ_{n+1} 时）
+% lambda_damp = σ_{n+1}² → 标准 LS
+% lambda_damp > σ_{n+1}² → 阻尼 LS（保守步长）
+lambda_damp = 0.01;
 
 % ----- input data ------
-[Pos_ref_seq, Pos_valid_seq] = calib_seq_generate(unit_para);  % 生成标定数据和验证数据
+[Pos_ref_seq, Pos_valid_seq] = calib_seq_generate(unit_para);
 seq_len = size(Pos_ref_seq, 2);
 valid_len = size(Pos_valid_seq, 2);
-% ----- end input data ------
+
 
 %% 标定步骤
 [p_seq_nom, xi_seq_nom] = parameterize(limb_dir, B, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
 
-% 创建"真实"模型：
-%   1. 静平台坐标系整体偏移（模拟测量坐标系与静平台坐标系的对齐偏差）
-%   2. 叠加各结构参数的随机制造误差
+% 创建"真实"模型：在名义参数上叠加制造误差
 rng(0313);
-B_offset = B + delta_B_sys;  % delta_B_sys 对每列广播
-[p_seq_offset, ~] = parameterize(limb_dir, B_offset, r1, r2, l0_seq, P_m, joint_u_angle_tilt);
-p_seq_true = p_seq_offset + para_err_std * rand(6, 34);
+p_seq_true = p_seq_nom + para_err_std * rand(6, 34);
 
 T_cal_seq = zeros(4, 4, seq_len);
 T_measure_seq = zeros(4, 4, seq_len);
@@ -72,14 +74,14 @@ err_seq_iter = zeros(6*seq_len, 1);
 
 T_measure_valid_seq = zeros(4, 4, valid_len);
 joint_valid_seq = zeros(6, 5, valid_len);
-p_seq_iter = p_seq_nom;  % 结构参数序列
+p_seq_iter = p_seq_nom;
 xi_seq_iter = xi_seq_nom;
 
 %% 仿真测量数据生成
 %   步骤1：名义逆解 → 主动关节量（"指令值"）
 %   步骤2：真实模型正解 → 实际输出位姿（"测量值"）
 for im = 1 : seq_len
-    T_cal_seq(:,:,im) = pos2trans(Pos_ref_seq(:, im), B,'unit','rad');
+    T_cal_seq(:,:,im) = pos2trans(Pos_ref_seq(:, im), B);
 
     % 步骤1：名义模型逆解得到所有关节量（含主动+被动）
     joint_q_ref = keni_sol_inverse(T_cal_seq(:,:,im), B, l0_seq, P_m, p_seq_nom);
@@ -92,14 +94,12 @@ for im = 1 : seq_len
     Pc_world_noisy = Pc_world(1:3, :) + noise_measure_std * randn(3, 3);
     T_M_world_noisy = three_pts2trans(Pc_world_noisy(:,1), Pc_world_noisy(:,2), Pc_world_noisy(:,3));
     T_measure_seq(:,:,im) = T_M_world_noisy / T_platform2calib;
-  
 
     % 标定初始关节量（名义逆解值）
     joint_seq_iter(:,:,im) = joint_q_ref;
 
     % 初始位姿误差
     err_seq_iter(6*(im-1)+1 : 6*im) = log_se3(T_measure_seq(:,:,im) / T_cal_seq(:,:,im));
-
 end
 
 %% 验证集生成：与标定集相同的噪声添加流程
@@ -114,19 +114,20 @@ for iv = 1 : valid_len
     T_measure_valid_seq(:,:,iv) = T_M_world_noisy / T_platform2calib;
 end
 
-%% 引入真实位姿，判断误差是否小于容差，是则结束，否则进入迭代
+
+%% RTLS 迭代标定
 calib_loop = 0;
 Jp_bar = zeros(6*seq_len, 112);
-err_list = zeros(loop_max+1,1);
-lambda = 1e-1;
+err_list = zeros(loop_max, 1);
+method_list = cell(loop_max, 1);
+lambda_list = zeros(loop_max, 1);
 
 err_cur = norm(err_seq_iter);
-err_list(1) = err_cur;
 
 %% 标定前验证集残差（名义参数 p_seq_nom）
 err_valid_pre = zeros(6*valid_len, 1);
-dpos_pre = zeros(valid_len, 1);   % 位置误差 (mm)
-dang_pre = zeros(valid_len, 1);   % 姿态误差 (°)
+dpos_pre = zeros(valid_len, 1);
+dang_pre = zeros(valid_len, 1);
 for iv = 1 : valid_len
     [T_cal_valid, ~] = keni_sol_forward(joint_valid_seq(:,:,iv), p_seq_nom, keni_forward_err_max);
     err_valid_pre(6*(iv-1)+1 : 6*iv) = log_se3(T_measure_valid_seq(:,:,iv) / T_cal_valid);
@@ -142,66 +143,99 @@ fprintf("验证集标定前 ——\n pos:  mean=%.4f  max=%.4f  rmse=%.4f mm, \n
 
 while err_cur > err_max
     [U, N, V_prep, M] = calib_iter_row_space_matrix(xi_seq_iter);
-    % size(U{1})
-    % size(V_prep{1})
-    % size(V{1})
     [Lambda, Ap] = calib_iter_restore_matrix(p_seq_iter);
-    % 更新运动学参数
+
     for im = 1 : seq_len
-        % Jp_bar(6*(im-1)+1 : 6*(im-1) + 6, :) = calib_iter_matrix(joint_seq_iter(:,:,im), p_seq_iter);
         Jp_bar(6*(im-1)+1 : 6*(im-1) + 6, :) = calib_iter_matrix2(joint_seq_iter(:,:,im), p_seq_iter, xi_seq_iter, U, V_prep);
     end
-    
 
-    pk = (Jp_bar' * Jp_bar + lambda * eye(size(Jp_bar, 2))) \ (Jp_bar' * err_seq_iter);
-    
-    delta_p_seq = restore_full_param_increment(pk, U, V_prep, Lambda, Ap);  % 依据式(3-28)恢复为原始运动学参数
-    p_seq_vec = p_seq_iter(:) + delta_p_seq(:);  % A(:)矩阵按列排列成列向量
-    p_seq_iter = reshape(p_seq_vec, size(p_seq_iter, 1), size(p_seq_iter, 2));  % 将向量重排为矩阵
-    % p_seq_vec = p_seq_iter(:) + 0.001 * pinv(Jp_bar' * Jp_bar) * Jp_bar' * err_seq_iter;
-    
+    % 组合 TLS + 外部阻尼求解
+    [pk, tls_info] = solve_tls(Jp_bar, err_seq_iter, lambda_damp);
 
-    xi_seq_iter = rebuild_xi_seq_from_p(p_seq_iter);  % 更新零位全局旋量坐标，供下一轮迭代使用
-    
+    % 保存回退状态（正解失败时回退）
+    p_seq_prev = p_seq_iter;
+    xi_seq_prev = xi_seq_iter;
+    err_prev = err_seq_iter;
+
+    % 直接应用全步长（与 calibration4.m 一致，不进行线搜索）
+    delta_p_seq = restore_full_param_increment(pk, U, V_prep, Lambda, Ap);
+    p_seq_vec = p_seq_iter(:) + delta_p_seq(:);
+    p_seq_iter = reshape(p_seq_vec, size(p_seq_iter, 1), size(p_seq_iter, 2));
+    xi_seq_iter = rebuild_xi_seq_from_p(p_seq_iter);
+
+    % 正解验证
+    fk_success = true;
+    T_cal_try = zeros(4, 4, seq_len);
+    joint_q_try = zeros(6, 5, seq_len);
+    err_try = zeros(6*seq_len, 1);
     for im = 1 : seq_len
-        % 新运动学参数下的正解
-        [T_cal_seq(:,:,im), joint_seq_iter(:,:,im)] = keni_sol_forward(joint_seq_iter(:,:,im), p_seq_iter, keni_forward_err_max);
-        % 计算位姿误差
-        err_seq_iter(6*(im-1)+1 : 6*im) = log_se3(T_measure_seq(:,:,im) / T_cal_seq(:,:,im));
+        try
+            [T_cal_try(:,:,im), joint_q_try(:,:,im)] = keni_sol_forward(joint_seq_iter(:,:,im), p_seq_iter, keni_forward_err_max);
+            err_try(6*(im-1)+1 : 6*im, 1) = log_se3(T_measure_seq(:,:,im) / T_cal_try(:,:,im));
+        catch
+            fk_success = false;
+            break;
+        end
     end
 
-    
-    % 阻尼系数迭代
-    err_new = norm(err_seq_iter);
-    delta_err = err_new - err_cur;  % 实际下降
-    delta_qk = -1 *( (Jp_bar'*err_seq_iter)'*pk + 0.5*pk'*(Jp_bar'*Jp_bar)*pk );  % 期望下降
-    eta = delta_err / delta_qk;
-            
-    % 系数可调整
-    if eta > 0.75
-        lambda = lambda * 0.5;
-    elseif eta < 0.25
-        lambda = lambda * 3;
+    if ~fk_success || any(isnan(err_try)) || any(isinf(err_try))
+        % 正解失败 → 增大阻尼，回退参数，重试
+        lambda_damp = max(lambda_damp * 10, 1e-3);
+        p_seq_iter = p_seq_prev;
+        xi_seq_iter = xi_seq_prev;
+        err_cur = norm(err_prev);
+        calib_loop = calib_loop + 1;
+        err_list(calib_loop) = err_cur;
+        method_list{calib_loop} = 'FAIL';
+        lambda_list(calib_loop) = lambda_damp;
+        if calib_loop > loop_max; break; end
+        continue;
     end
-    
+
+    % 增益比自适应阻尼（与 calibration4.m LM 策略一致）
+    err_new = norm(err_try);
+    delta_err = err_new - err_cur;
+    delta_qk = -1 * ((Jp_bar' * err_seq_iter)' * pk + 0.5 * pk' * (Jp_bar' * Jp_bar) * pk);
+
+    if abs(delta_qk) > 1e-15
+        eta = delta_err / delta_qk;
+    else
+        eta = 0;
+    end
+
+    if eta > 0.75
+        lambda_damp = lambda_damp * 0.5;
+    elseif eta < 0.25
+        lambda_damp = max(lambda_damp * 3, 1e-8);
+    end
+
+    % 始终接受步长（与 calibration4.m 一致）
+    T_cal_seq = T_cal_try;
+    joint_seq_iter = joint_q_try;
+    err_seq_iter = err_try;
+    err_cur = err_new;
 
     calib_loop = calib_loop + 1;
-    err_cur = err_new;
-    err_list(calib_loop+1) = err_cur;
-    
-    if(rem(calib_loop, 10) == 0)
-        fprintf("loop = %d\n", calib_loop);
-    end
-    if calib_loop >= loop_max
+    err_list(calib_loop) = err_cur;
+    method_list{calib_loop} = tls_info.method;
+    lambda_list(calib_loop) = lambda_damp;
+
+    if calib_loop > loop_max
         break;
     end
-    
+
+    if rem(calib_loop, 10) == 0
+        fprintf("loop = %d, err = %.2e, lambda = %.1e, %s (rank=%d, gap=%.1e)\n", ...
+                calib_loop, err_cur, lambda_damp, tls_info.method, tls_info.eff_rank, tls_info.gap);
+    end
 end
+
+fprintf('>>>>> RTLS 标定完成: %d 次迭代, 最终误差 = %.3e <<<<<\n', calib_loop, err_cur);
 
 %% 标定后验证集残差（标定后参数 p_seq_iter）
 err_valid_post = zeros(6*valid_len, 1);
-dpos_post = zeros(valid_len, 1);   % 位置误差 (mm)
-dang_post = zeros(valid_len, 1);   % 姿态误差 (°)
+dpos_post = zeros(valid_len, 1);
+dang_post = zeros(valid_len, 1);
 for iv = 1 : valid_len
     [T_cal_valid, ~] = keni_sol_forward(joint_valid_seq(:,:,iv), p_seq_iter, keni_forward_err_max);
     err_valid_post(6*(iv-1)+1 : 6*iv) = log_se3(T_measure_valid_seq(:,:,iv) / T_cal_valid);
@@ -224,7 +258,7 @@ plot(1:valid_len, dpos_pre, 'Color', [0.7 0.7 0.7], 'LineWidth', 1.0); hold on;
 plot(1:valid_len, dpos_post, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.0);
 yline(mean(dpos_pre), '--', 'Color', [0.5 0.5 0.5], 'LineWidth', 0.8);
 yline(mean(dpos_post), '--', 'Color', [0.85 0.33 0.10], 'LineWidth', 0.8);
-ylabel('Δd (mm)', 'FontSize', 12, 'FontName', 'Times New Roman');
+ylabel('\Deltad (mm)', 'FontSize', 12, 'FontName', 'Times New Roman');
 legend({'标定前', '标定后'}, 'FontSize', 11, 'FontName', '微软雅黑', 'Location', 'best');
 set(gca, 'FontSize', 11, 'FontName', 'Times New Roman', 'LineWidth', 1.0);
 grid on; box on;
@@ -235,32 +269,68 @@ plot(1:valid_len, dang_post, 'Color', [0.85 0.33 0.10], 'LineWidth', 1.0);
 yline(mean(dang_pre), '--', 'Color', [0.5 0.5 0.5], 'LineWidth', 0.8);
 yline(mean(dang_post), '--', 'Color', [0.85 0.33 0.10], 'LineWidth', 0.8);
 xlabel('Valid pos labels', 'FontSize', 12, 'FontName', '微软雅黑');
-ylabel('Δθ (°)', 'FontSize', 12, 'FontName', 'Times New Roman');
+ylabel('\Delta\theta (°)', 'FontSize', 12, 'FontName', 'Times New Roman');
 set(gca, 'FontSize', 11, 'FontName', 'Times New Roman', 'LineWidth', 1.0);
 grid on; box on;
 
-fig = figure('Color', [1 1 1]);
-plot(0:calib_loop, err_list(1:calib_loop+1),'linewidth',1.5)
-set(gca, 'YScale', 'log');  % 对数坐标轴
-grid on
-set(gca,'linewidth',1.5,'fontsize',15,'fontname','Times New Roman');
-set(gcf,'unit','centimeters','position',[10 10 14 8]);
-xlabel('迭代次数', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
-ylabel('残余误差', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold', 'Color', 'black');
 
-[B_out, r1_out, r2_out, l0_out, P_m_out, limb_out, joint_u_angle_tilt_out] = ...
-    deparameterize(p_seq_iter, P_m, limb_dir);
+%% 绘图
+tls_idx = find(strcmp(method_list(1:calib_loop), 'TLS'));
+rtls_idx = find(strcmp(method_list(1:calib_loop), 'RTLS'));
+dls_idx = find(strcmp(method_list(1:calib_loop), 'DLS'));
+
+fig = figure('Color', [1 1 1]);
+
+subplot(1, 3, 1);
+semilogy(0:calib_loop-1, err_list(1:calib_loop), 'b-', 'linewidth', 1.5);
+set(gca, 'linewidth', 1.5, 'fontsize', 12, 'fontname', 'Times New Roman');
+xlabel('迭代次数', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold');
+ylabel('残余误差', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold');
+title('标定收敛曲线', 'FontSize', 14, 'FontName', '微软雅黑');
+grid on;
+
+subplot(1, 3, 2);
+hold on;
+if ~isempty(tls_idx)
+    stem(tls_idx, ones(size(tls_idx))*1.2, 'b', 'linewidth', 1.5, 'Marker', 'none');
+end
+if ~isempty(rtls_idx)
+    stem(rtls_idx, ones(size(rtls_idx))*1.1, 'g', 'linewidth', 1.5, 'Marker', 'none');
+end
+if ~isempty(dls_idx)
+    stem(dls_idx, ones(size(dls_idx))*1.0, 'r', 'linewidth', 1.5, 'Marker', 'none');
+end
+hold off;
+set(gca, 'linewidth', 1.5, 'fontsize', 12, 'fontname', 'Times New Roman', ...
+         'ytick', [1.0 1.1 1.2], 'yticklabel', {'DLS', 'RTLS', 'TLS'});
+xlabel('迭代次数', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold');
+title('每轮求解方法', 'FontSize', 14, 'FontName', '微软雅黑');
+ylim([0.85 1.35]);
+grid on;
+
+subplot(1, 3, 3);
+semilogy(1:calib_loop, lambda_list(1:calib_loop), 'r-o', 'linewidth', 1.2, 'MarkerSize', 4);
+set(gca, 'linewidth', 1.5, 'fontsize', 12, 'fontname', 'Times New Roman');
+xlabel('迭代次数', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold');
+ylabel('阻尼 \lambda', 'FontSize', 14, 'FontName', '微软雅黑', 'FontWeight', 'bold');
+title('阻尼自适应', 'FontSize', 14, 'FontName', '微软雅黑');
+grid on;
+
+set(gcf, 'unit', 'centimeters', 'position', [10 10 30 8]);
 
 %% 标定参数导出为 CSV（SI 单位: m, rad）
+[B_out, r1_out, r2_out, l0_out, P_m_out, limb_out, alpha_out] = ...
+    deparameterize(p_seq_iter, P_m, limb_dir);
+
 calib_csv = 'calibrated_params.csv';
 fid = fopen(calib_csv, 'w');
-fprintf(fid, '# SPR-4UPS calibrated kinematic parameters\n');
+fprintf(fid, '# SPR-4UPS calibrated kinematic parameters (RTLS)\n');
 fprintf(fid, '# Units: m (length), rad (angle)\n');
 fprintf(fid, '# Columns: param_name, value[, value...]\n');
 fprintf(fid, '# Rows: one parameter per line, label then values\n');
 fprintf(fid, 'r1,%.12f\n', r1_out);
 fprintf(fid, 'r2,%.12f\n', r2_out);
-fprintf(fid, 'joint_u_angle_tilt,%.12f\n', joint_u_angle_tilt_out);
+fprintf(fid, 'alpha,%.12f\n', alpha_out);
 for i = 1:5
     fprintf(fid, 'l0_%d,%.12f\n', i, l0_out(i));
 end

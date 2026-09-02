@@ -17,9 +17,9 @@ h = paras(8);  % 100
 L_tool = 0;
 
 pos_plant = [0; 0; -800];  % 后面作图用，不参与空间搜索
-alpha_plant = paras(10) / 180 * pi;  % 绕 x
-beta_plant = paras(10) / 180 * pi;  % 绕 y
-gamma_plant = paras(11) / 180 * pi;  % 绕 z
+alpha_plant = 0;  % 绕 x
+beta_plant = 0;  % 绕 y
+gamma_plant = 0;  % 绕 z
 
 % l_max = 1030;
 % l_min = 720;  % 670
@@ -40,12 +40,6 @@ B4 = [R2*cos(limb_dir(4)); R2*sin(limb_dir(4)); H];
 B5 = [R2*cos(limb_dir(5)); R2*sin(limb_dir(5)); H];
 B = [B1 B2 B3 B4 B5];
 
-
-% Position and Posture of Move Plant
-% pos_plant = [0; 0; -600];  % 后面作图用，不参与空间搜索
-% alpha_plant = 0 / 180 * pi;  % 绕 x
-% beta_plant = 0 / 180 * pi;  % 绕 y
-% gamma_plant = 0 / 180 * pi;  % 绕 z
 
 Rx = [1                0                 0;
       0 cos(alpha_plant) -sin(alpha_plant);
@@ -77,8 +71,10 @@ end
 
 
 % ball screw dir vector
-ball_screw_dir_angle_deg = [145 145 145  145 145;   % 与Z轴夹角
-                            -90  30 150 -150 -30];  % 与x轴夹角
+% ball_screw_dir_angle_deg = [145 145 145  145 145;   % 与Z轴夹角
+%                             -90  30 150 -150 -30];  % 与x轴夹角
+ball_screw_dir_angle_deg = [35 35 35  35 35;   % 与Z轴夹角
+                            90 210 -30 30 150];  % 与x轴夹角
 ball_screw_dir_angle = ball_screw_dir_angle_deg / 180 * pi;
 ball_vector = zeros(3, 5);
 ball_vector_world = zeros(3, 5);
@@ -97,7 +93,7 @@ for i_ball = 1 : 5
     static_joint_vector(2, i_ball) = sin(static_joint_dir_angle(1, i_ball)) * sin(static_joint_dir_angle(2, i_ball));
     static_joint_vector(3, i_ball) = cos(static_joint_dir_angle(1, i_ball));
 end
-ball_vector_world = R_plant * ball_vector;
+ball_vector_world = -1 * R_plant * ball_vector;
 % -----end-parameter3------
 
 

@@ -3,26 +3,26 @@ clear
 velocity_solve_flag = 0;  % 1表示求解运动速度
 force_solve_flag = 1;  % 1表示求解静态力
 
+path_add()
+fprintf('>>>= start (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 % Parameters
-unit_para = 0.001;  % 0.001表示m，1表示mm
+basic_paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'm');  % 单位意思是程序中用到的单位
+l_max = basic_paras.l_max;
+l_min = basic_paras.l_min;
+R1 = basic_paras.R1;
+R2 = basic_paras.R2;
+H = basic_paras.H;
+r1 = basic_paras.r1;
+r2 = basic_paras.r2;
+h = basic_paras.h;
+L_tool = basic_paras.L_tool;
+limb_dir = basic_paras.limb_dir;
+B = basic_paras.B;
+P_m = basic_paras.P_m;
+l0_seq = basic_paras.l0_seq;
+joint_u_angle_tilt = basic_paras.joint_u_angle_tilt;
+unit_para = basic_paras.unit_para;
 
-T = readtable('parameters.xlsx', 'Range', 'A2:B12');
-paras = table2array(T(:, 2));
-l_max = paras(1)*unit_para;
-l_min = paras(2)*unit_para;  % 670
-R1 = paras(3)*unit_para;  % 550
-R2 = paras(4)*unit_para;  % 500
-H = paras(5)*unit_para;  % 0
-r1 = paras(6)*unit_para;  % 100
-r2 = paras(7)*unit_para;  % 80
-h = paras(8)*unit_para;  % 10
-% L_tool = paras(12)*unit_para;
-L_tool = 0;  % ===========================================
-
-pos_plant = [0*unit_para; 0*unit_para; -600*unit_para];  % 表示分析力时的位置
-alpha_plant = paras(9) / 180 * pi;  % 绕 x
-beta_plant = paras(10) / 180 * pi;  % 绕 y
-gamma_plant = paras(11) / 180 * pi;  % 绕 z
 
 
 % Force
@@ -31,51 +31,22 @@ g = 9.8;
 % F_ex = [10*g; 0; 0; 0; 0; 0];  % x
 % F_ex = [0; 0; -250; 0; 0; 0];  % z
 % F_ex = [0; -3.5*g; -sqrt(3)*3.5*g; 0; 0; 0];
-% 力作用点
-p_f_ex = [-50.5; 166.5; -40] * unit_para;
-f_ex = [-30; 0; 0];
-m_ex = [0; -f_ex(1)*p_f_ex(3); -f_ex(1)*p_f_ex(2)];
-F_ex = [f_ex; m_ex];
-
-% Points
-limb_dir = [pi/2; 7*pi/6; -pi/6; pi/2-deg2rad(45); pi/2+deg2rad(45)];
-% limb_dir = [pi/2; deg2rad(-90-45); deg2rad(-90+45); deg2rad(45); deg2rad(135)];
-% limb_dir = [pi/2; 7*pi/6; -pi/6; pi/6; 5*pi/6];
-B1 = [R1*cos(limb_dir(1)); R1*sin(limb_dir(1)); 0];
-B2 = [R1*cos(limb_dir(2)); R1*sin(limb_dir(2)); 0];
-B3 = [R1*cos(limb_dir(3)); R1*sin(limb_dir(3)); 0];
-B4 = [R2*cos(limb_dir(4)); R2*sin(limb_dir(4)); H];
-B5 = [R2*cos(limb_dir(5)); R2*sin(limb_dir(5)); H];
-B = [B1 B2 B3 B4 B5];
-
-% move plant parameter
-limb_dir_move = limb_dir;
-P1_m = [r1*cos(limb_dir_move(1)); r1*sin(limb_dir_move(1)); L_tool];
-P2_m = [r1*cos(limb_dir_move(2)); r1*sin(limb_dir_move(2)); L_tool];
-P3_m = [r1*cos(limb_dir_move(3)); r1*sin(limb_dir_move(3)); L_tool];
-P4_m = [r2*cos(limb_dir_move(4)); r2*sin(limb_dir_move(4)); L_tool + h];
-P5_m = [r2*cos(limb_dir_move(5)); r2*sin(limb_dir_move(5)); L_tool + h];
-P_m = [P1_m P2_m P3_m P4_m P5_m];
-
-
-Rx = [1                0                 0;
-      0 cos(alpha_plant) -sin(alpha_plant);
-      0 sin(alpha_plant)  cos(alpha_plant)];
-
-Ry = [ cos(beta_plant) 0 sin(beta_plant);
-                     0 1               0;
-      -sin(beta_plant) 0 cos(beta_plant)];
-
-Rz = [cos(gamma_plant) -sin(gamma_plant) 0;
-      sin(gamma_plant)  cos(gamma_plant) 0;
-                     0                0  1];
-
-R_plant = Rz * Ry * Rx;
-
+% ===== 力作用点
+% p_f_ex = [-50.5; 166.5; -40] * unit_para;
+% f_ex = [-30; 0; 0];
+% m_ex = [0; -f_ex(1)*p_f_ex(3); -f_ex(1)*p_f_ex(2)];
+% F_ex = [f_ex; m_ex];
+F_ex = [0; 0; 4*g; 0; 0; 0];
 
 % Length and Poster of limbs
 s_limb = zeros(3, 5);
 l_limb = zeros(1, 5);
+
+
+pos_plant = [0*unit_para; -190*unit_para; -725*unit_para];  % 表示分析力时的位置
+Pos_ref = [pos_plant; 0; 0];
+T_ref = pos2trans(Pos_ref, B, 'unit', 'rad');
+R_plant = T_ref(1:3, 1:3);
 
 for i = 1:5
     v_limb = pos_plant + R_plant * P_m(:, i) - B(:, i);
