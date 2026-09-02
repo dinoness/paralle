@@ -2,8 +2,14 @@ clear
 path_add()
 
 %% 生成刀具空间
-flag = 1;  % 1表示平面空间，2表示球面空间
+flag = 2;  % 1表示平面空间，2表示球面空间
 
+% step_size = 15;
+% x_seq = -105 : step_size : 105;
+% y_seq = -105 : step_size : 105;
+
+
+% 注意参数恢复-----------------------------------
 if flag == 1
     D = 200;
     R = D / 2;
@@ -11,7 +17,7 @@ if flag == 1
     step_size = 50;
     x_seq = -200 : step_size : 200;
     y_seq = -200 : step_size : 200;
-    z_seq = -40 : 20 : 40;
+    z_seq = 0 : 40 : 40;  % -40 -- 40
     x0 = 0;
     y0 = 0;
     z0 = -972.5;
@@ -19,10 +25,10 @@ elseif flag == 2
     D = 100;
     R = D / 2;
     H = 15;
-    step_size = 20;
+    step_size = 50;
     x_seq = -200 : step_size : 200;
     y_seq = -200 : step_size : 200;
-    z_seq = -40 : step_size : 40;
+    z_seq = -40 : 40 : 0;  % -40 -- 40
     x0 = 0;
     y0 = 0;
     z0 = -877.5;
@@ -126,15 +132,14 @@ title('Surface center points')
 fprintf('>>>= done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 
 function write_cmd_csv(file_name, pts)
-    % pts: 每列 [x; y; z; phi; theta]
+    % pts: 每列 [x; y; z; phi; theta]，长度单位mm；输出csv时转换为um
     fid = fopen(file_name, 'w');
     fprintf(fid, 'cmd,x,y,z,phi,theta,ticks\n');
     for i = 1 : size(pts, 2)
-        fprintf(fid, '2,%g,%g,%g,%g,%g,0\n', pts(:, i));
-        if i < size(pts, 2)
-            fprintf(fid, '20,0,0,0,0,0,5000\n');
-        end
+        fprintf(fid, '2,%g,%g,%g,%g,%g,0\n', pts(1:3, i)*1000, pts(4, i), pts(5, i));
+        fprintf(fid, '20,0,0,0,0,0,2000\n');
     end
-    fprintf(fid, '2,0,0,-800,0,0,0\n');
+    fprintf(fid, '2,0,0,-800000,0,0,0\n');
+    fprintf(fid, '0,0,0,0,0,0,0\n');  % 用来表示结束
     fclose(fid);
 end
