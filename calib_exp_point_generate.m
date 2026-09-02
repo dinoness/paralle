@@ -2,17 +2,13 @@ clear
 path_add()
 
 %% 生成刀具空间
-flag = 2;  % 1表示平面空间，2表示球面空间
-
-% step_size = 15;
-% x_seq = -105 : step_size : 105;
-% y_seq = -105 : step_size : 105;
+flag = 1;  % 1表示平面空间，2表示球面空间
 
 if flag == 1
     D = 200;
     R = D / 2;
     H = 15;
-    step_size = 25;
+    step_size = 50;
     x_seq = -200 : step_size : 200;
     y_seq = -200 : step_size : 200;
     z_seq = -40 : 20 : 40;
