@@ -1,80 +1,35 @@
+% 生成重复性测试用轨迹
+% 共有5个点，以相同的方式一次经过，循环30次
+
 clear
 path_add()
 
-%% 生成刀具空间
 flag = 1;  % 1表示平面空间，2表示球面空间
 
-% step_size = 15;
-% x_seq = -105 : step_size : 105;
-% y_seq = -105 : step_size : 105;
 
-
-% 注意参数恢复-----------------------------------
 if flag == 1
-    D = 200;
-    R = D / 2;
-    H = 15;
-    step_size = 40;
-    x_seq = -200 : step_size : 200;
-    y_seq = -200 : step_size : 200;
-    z_seq = -40 : 40 : 40;  % -40 -- 40
-    x0 = 0;
-    y0 = 0;
-    z0 = -972.5;
-elseif flag == 2
-    D = 100;
-    R = D / 2;
-    H = 15;
-    step_size = 40;
-    x_seq = -200 : step_size : 200;
-    y_seq = -200 : step_size : 200;
-    z_seq = -40 : 40 : 40;  % -40 -- 40
-    x0 = 0;
-    y0 = -190;
-    z0 = -877.5;
+    a_square = 80;
+    Pc = [0; 0; -972.5];
+else
+    a_square = 45;
+    Pc = [0; -190; -877.5];
 end
 
-x_length = length(x_seq);
-y_length = length(y_seq);
-z_length = length(z_seq);
-points = [];
 
-for iz = 1 : z_length
-    for ix = 1 : x_length
-        for iy = 1 : y_length
-            p = [x_seq(ix)+x0; y_seq(iy)+y0; z_seq(iz)+z0];
-            dis = norm(p(1:2) - [x0; y0]);  % 到空间中心 (x0,y0,z0) 的距离
-            if dis <= R
-                points = [points p];
-            end
-        end
-    end
-end
-plot(points(1,:),points(2,:),'.');
-fprintf('point num = %d \n', length(points(1,:)))
+P1 = [0; 0; 0];
+P2 = [0.4*a_square; 0.4*sqrt(2)*a_square; 0.4*sqrt(2)*a_square];
+P3 = [-0.4*a_square; 0.4*sqrt(2)*a_square; 0.4*sqrt(2)*a_square];
+P4 = [-0.4*a_square; -0.4*sqrt(2)*a_square; -0.4*sqrt(2)*a_square];
+P5 = [0.4*a_square; -0.4*sqrt(2)*a_square; -0.4*sqrt(2)*a_square];
+P = [P1 P2 P3 P4 P5] + Pc;
 
-%% 1. 添加姿态信息，生成刀具末端点位姿序列 (x, y, z, phi, theta)
-% 平面空间：phi = 0, theta = 0
-% 球面空间：theta = 0 取一个姿态；theta = 5°, 10° 时 phi 分别取 -120°, 0°, 120°
-% 角度单位：deg
-if flag == 1
-    pose_seq = [0 0];  % [phi theta]
-elseif flag == 2
-    pose_seq = [   0  0;
-                -120  5;
-                   0  5;
-                 120  5;
-                -120 10;
-                   0 10;
-                 120 10];
-end
-
+%% 1. 添加姿态信息并循环30次，生成刀具末端点位姿序列 (x, y, z, phi, theta)
+% 每个点的姿态均为 phi = 0, theta = 0；角度单位：deg
+n_repeat = 30;
 tool_points = [];  % 每列 [x; y; z; phi; theta]
-% 按姿态分组遍历：先以第1个姿态走完所有xyz点，再切换到第2个姿态，以此类推
-% （平面空间仅有1个姿态，遍历顺序不受影响）
-for j = 1 : size(pose_seq, 1)
-    for i = 1 : size(points, 2)
-        tool_points = [tool_points [points(:, i); pose_seq(j, 1); pose_seq(j, 2)]];
+for k = 1 : n_repeat
+    for i = 1 : size(P, 2)
+        tool_points = [tool_points [P(:, i); 0; 0]];
     end
 end
 fprintf('tool point num (with pose) = %d \n', size(tool_points, 2))
@@ -115,11 +70,11 @@ if ~exist('calibration_data', 'dir')
     mkdir('calibration_data');
 end
 if flag == 1
-    write_cmd_csv(fullfile('calibration_data', 'calib_exp_tool_points_planar.csv'), tool_points);
-    write_cmd_csv(fullfile('calibration_data', 'calib_exp_surf_points_planar.csv'), surf_points);
+    write_cmd_csv(fullfile('calibration_data', 'repeat_tool_points_planar.csv'), tool_points);
+    write_cmd_csv(fullfile('calibration_data', 'repeat_surf_points_planar.csv'), surf_points);
 elseif flag == 2
-    write_cmd_csv(fullfile('calibration_data', 'calib_exp_tool_points_spherical.csv'), tool_points);
-    write_cmd_csv(fullfile('calibration_data', 'calib_exp_surf_points_spherical.csv'), surf_points);
+    write_cmd_csv(fullfile('calibration_data', 'repeat_tool_points_spherical.csv'), tool_points);
+    write_cmd_csv(fullfile('calibration_data', 'repeat_surf_points_spherical.csv'), surf_points);
 end
 
 figure('Color', [1 1 1]);
@@ -145,3 +100,8 @@ function write_cmd_csv(file_name, pts)
     fprintf(fid, '0,0,0,0,0,0,0\n');  % 用来表示结束
     fclose(fid);
 end
+
+
+
+
+
