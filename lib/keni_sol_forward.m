@@ -209,9 +209,7 @@ while cur_err > err_max  % sum(abs(err))
     end
 
     % fprintf("loop = %d, err = %.4f, rank(J_all'*J_all) = %d\n", loop, sum(abs(err)), rank(J_all'*J_all));
-    % ===============MY CODE-END==================
-    end
-    
+
 end
 
 % 输出误差曲线
