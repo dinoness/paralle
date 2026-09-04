@@ -50,6 +50,10 @@ while cur_err > err_max  % sum(abs(err))
 
     % end
 
+    % J_all = [J_passive(:,1:4,1) -1*J_passive(:,:,2)          zeros(6,5)          zeros(6,5)          zeros(6,5);
+    %                  zeros(6,4)    J_passive(:,:,2) -1*J_passive(:,:,3)          zeros(6,5)          zeros(6,5);
+    %                  zeros(6,4)          zeros(6,5)    J_passive(:,:,3) -1*J_passive(:,:,4)          zeros(6,5);
+    %                  zeros(6,4)          zeros(6,5)          zeros(6,5)    J_passive(:,:,4) -1*J_passive(:,:,5)];
     J_all = [J_passive(:,1:4,1) -1*J_passive(:,:,2)          zeros(6,5)          zeros(6,5)          zeros(6,5);
              J_passive(:,1:4,1)          zeros(6,5) -1*J_passive(:,:,3)          zeros(6,5)          zeros(6,5);
              J_passive(:,1:4,1)          zeros(6,5)          zeros(6,5) -1*J_passive(:,:,4)          zeros(6,5);
@@ -205,8 +209,7 @@ while cur_err > err_max  % sum(abs(err))
     end
 
     % fprintf("loop = %d, err = %.4f, rank(J_all'*J_all) = %d\n", loop, sum(abs(err)), rank(J_all'*J_all));
-    
-    
+
 end
 
 % 输出误差曲线

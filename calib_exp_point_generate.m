@@ -2,7 +2,7 @@ clear
 path_add()
 
 %% 生成刀具空间
-flag = 2;  % 1表示平面空间，2表示球面空间
+flag = 1;  % 1表示平面空间，2表示球面空间
 
 % step_size = 15;
 % x_seq = -105 : step_size : 105;
@@ -17,7 +17,7 @@ if flag == 1
     step_size = 50;
     x_seq = -200 : step_size : 200;
     y_seq = -200 : step_size : 200;
-    z_seq = 0 : 40 : 40;  % -40 -- 40
+    z_seq = -40 : 80 : 40;  % -40 -- 40
     x0 = 0;
     y0 = 0;
     z0 = -972.5;
@@ -25,12 +25,12 @@ elseif flag == 2
     D = 100;
     R = D / 2;
     H = 15;
-    step_size = 50;
+    step_size = 40;
     x_seq = -200 : step_size : 200;
     y_seq = -200 : step_size : 200;
-    z_seq = -40 : 40 : 0;  % -40 -- 40
+    z_seq = -40 : 40 : 40;  % -40 -- 40
     x0 = 0;
-    y0 = 0;
+    y0 = -190;
     z0 = -877.5;
 end
 
@@ -43,7 +43,7 @@ for iz = 1 : z_length
     for ix = 1 : x_length
         for iy = 1 : y_length
             p = [x_seq(ix)+x0; y_seq(iy)+y0; z_seq(iz)+z0];
-            dis = norm(p - [x0; y0; z0]);  % 到空间中心 (x0,y0,z0) 的距离
+            dis = norm(p(1:2) - [x0; y0]);  % 到空间中心 (x0,y0,z0) 的距离
             if dis <= R
                 points = [points p];
             end
@@ -58,7 +58,11 @@ fprintf('point num = %d \n', length(points(1,:)))
 % 球面空间：theta = 0 取一个姿态；theta = 5°, 10° 时 phi 分别取 -120°, 0°, 120°
 % 角度单位：deg
 if flag == 1
-    pose_seq = [0 0];  % [phi theta]
+    pose_seq = [   0  0;
+                -120  5;
+                 120  5;
+                -120 10;
+                 120 10];  % [phi theta]
 elseif flag == 2
     pose_seq = [   0  0;
                 -120  5;
@@ -70,8 +74,10 @@ elseif flag == 2
 end
 
 tool_points = [];  % 每列 [x; y; z; phi; theta]
-for i = 1 : size(points, 2)
-    for j = 1 : size(pose_seq, 1)
+% 按姿态分组遍历：先以第1个姿态走完所有xyz点，再切换到第2个姿态，以此类推
+% （平面空间仅有1个姿态，遍历顺序不受影响）
+for j = 1 : size(pose_seq, 1)
+    for i = 1 : size(points, 2)
         tool_points = [tool_points [points(:, i); pose_seq(j, 1); pose_seq(j, 2)]];
     end
 end
@@ -115,9 +121,11 @@ end
 if flag == 1
     write_cmd_csv(fullfile('calibration_data', 'calib_exp_tool_points_planar.csv'), tool_points);
     write_cmd_csv(fullfile('calibration_data', 'calib_exp_surf_points_planar.csv'), surf_points);
+    write_pose_csv(fullfile('calibration_data', 'calib_exp_surf_pose_planar.csv'), surf_points);
 elseif flag == 2
     write_cmd_csv(fullfile('calibration_data', 'calib_exp_tool_points_spherical.csv'), tool_points);
     write_cmd_csv(fullfile('calibration_data', 'calib_exp_surf_points_spherical.csv'), surf_points);
+    write_pose_csv(fullfile('calibration_data', 'calib_exp_surf_pose_spherical.csv'), surf_points);
 end
 
 figure('Color', [1 1 1]);
@@ -137,9 +145,19 @@ function write_cmd_csv(file_name, pts)
     fprintf(fid, 'cmd,x,y,z,phi,theta,ticks\n');
     for i = 1 : size(pts, 2)
         fprintf(fid, '2,%g,%g,%g,%g,%g,0\n', pts(1:3, i)*1000, pts(4, i), pts(5, i));
-        fprintf(fid, '20,0,0,0,0,0,2000\n');
+        fprintf(fid, '20,0,0,0,0,0,5000\n');  % 中间暂停
     end
     fprintf(fid, '2,0,0,-800000,0,0,0\n');
     fprintf(fid, '0,0,0,0,0,0,0\n');  % 用来表示结束
+    fclose(fid);
+end
+
+function write_pose_csv(file_name, pts)
+    % 仅输出位姿信息：x,y,z,phi,theta（长度单位mm，不转换为um，无cmd/ticks行）
+    fid = fopen(file_name, 'w');
+    fprintf(fid, 'x,y,z,phi,theta\n');
+    for i = 1 : size(pts, 2)
+        fprintf(fid, '%g,%g,%g,%g,%g\n', pts(:, i));
+    end
     fclose(fid);
 end
