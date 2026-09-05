@@ -1,8 +1,11 @@
-function [pose_seq, T_seq] = calib_pts2pose_seq(data_dir)
+function [pose_seq, T_seq] = calib_pts2pose_seq(data_dir, base_file)
 %CALIB_PTS2POSE_SEQ 处理标定测量数据，生成动平台表面坐标系位姿序列
 %   输入：
-%     data_dir — 数据目录，包含 t1.txt / t2.txt / t3.txt 三个文件，
-%                每行格式：行号(制表符)点编号, x, y, z（默认 'calib_p'）
+%     data_dir  — 数据目录，包含 t1.txt / t2.txt / t3.txt 三个文件，
+%                 每行格式：点编号, x, y, z（默认 'calib_p'）
+%     base_file — 世界坐标系定义文件（默认 'base.txt'），包含三个点：
+%                 三点平均值为原点，p2指向p3的方向为x轴，
+%                 p1到x轴的垂线（由垂足指向p1）为y轴，z轴由右手定则确定
 %   输出：
 %     pose_seq — 5×n 位姿序列，每列 [x; y; z; phi; theta]，
 %                为动平台表面坐标系在世界坐标系下的位姿，
@@ -12,42 +15,42 @@ function [pose_seq, T_seq] = calib_pts2pose_seq(data_dir)
 %                平移单位 mm
 %
 %   处理流程：
-%     1. 每个 txt 文件的首行与末行单独取出取平均，作为该文件的参考点，
+%     1. 读取 t1/t2/t3 测量文件，去除首行与末行（参考点复测），
 %        其余行为测量点；
-%     2. 参考坐标系：原点为三个参考点的均值，x轴为 t3参考点 指向 t2参考点
-%        的方向，y轴为原点指向x轴的垂线方向，z轴由右手定则确定；
-%     3. 相同编号的三个测量点以同样方法构建测量子坐标系，求其在参考
-%        坐标系下的表示；
-%     4. 世界坐标系：坐标轴与参考坐标系平行，参考坐标系原点在世界系中
-%        的位置为 (0, 0, -837.8) mm；
-%     5. 动平台表面坐标系：坐标轴与测量子坐标系平行，其原点在测量子坐标
+%     2. 由 base.txt 的三个点构建世界坐标系；
+%     3. 相同编号的三个测量点构建测量子坐标系：原点为三点均值，
+%        x轴为 p3 指向 p2 的方向，y轴为 p1 到x轴的垂线方向（由p1指向
+%        垂足），z轴由右手定则确定；
+%     4. 动平台表面坐标系：坐标轴与测量子坐标系平行，其原点在测量子坐标
 %        系中的位置为 (0, 0, 37.8) mm；最终输出动平台表面坐标系在世界
-%        坐标系下的位姿序列。
+%        坐标系下的位姿序列（位置和姿态矩阵均在世界系下描述）。
 
     if nargin < 1 || isempty(data_dir)
         data_dir = 'calib_p';
     end
+    if nargin < 2 || isempty(base_file)
+        base_file = 'base.txt';
+    end
 
-    O_ref_in_world = [0; 0; -837.8];  % 参考坐标系原点在世界系中的位置 (mm)
-    O_surf_in_meas = [0; 0; 37.8];    % 动平台表面原点在测量子坐标系中的位置 (mm)
+    O_surf_in_meas = [0; 0; 37.8];  % 动平台表面原点在测量子坐标系中的位置 (mm)
 
+    % 1. 测量点（去除首末行）
     [ids1, pts1] = read_points_file(fullfile(data_dir, 't1.txt'));
     [ids2, pts2] = read_points_file(fullfile(data_dir, 't2.txt'));
     [ids3, pts3] = read_points_file(fullfile(data_dir, 't3.txt'));
-
-    % 1. 首末行取平均作为参考点，其余为测量点
-    ref1 = mean(pts1(:, [1 end]), 2);
-    ref2 = mean(pts2(:, [1 end]), 2);
-    ref3 = mean(pts3(:, [1 end]), 2);
 
     ids1 = ids1(2:end-1);  pts1 = pts1(:, 2:end-1);
     ids2 = ids2(2:end-1);  pts2 = pts2(:, 2:end-1);
     ids3 = ids3(2:end-1);  pts3 = pts3(:, 2:end-1);
 
-    % 2. 参考坐标系
-    [R_ref, O_ref] = build_frame(ref1, ref2, ref3);
+    % 2. 世界坐标系（base_file 三点定义）
+    [~, base_pts] = read_points_file(fullfile(data_dir, base_file));
+    if size(base_pts, 2) ~= 3
+        error('%s 应包含 3 个点，实际读取到 %d 个', base_file, size(base_pts, 2));
+    end
+    [R_w, O_w] = build_world_frame(base_pts(:,1), base_pts(:,2), base_pts(:,3));
 
-    % 3. 相同编号的测量点构建测量子坐标系
+    % 3. 相同编号的测量点构建测量子坐标系，转换到世界坐标系下
     common_ids = intersect(intersect(ids1, ids2), ids3);
     n = numel(common_ids);
     pose_seq = zeros(5, n);
@@ -60,18 +63,15 @@ function [pose_seq, T_seq] = calib_pts2pose_seq(data_dir)
 
         [R_sub, O_sub] = build_frame(q1, q2, q3);
 
-        % 测量子坐标系在参考坐标系下的表示
-        R_rel = R_ref.' * R_sub;
-        t_rel = R_ref.' * (O_sub - O_ref);
+        % 测量子坐标系在世界坐标系下的表示
+        R_rel = R_w.' * R_sub;
+        t_rel = R_w.' * (O_sub - O_w);
 
-        % 4-5. 测量子坐标系 -> 动平台表面坐标系 -> 世界坐标系
-        % T_world_surf = T_world_ref * T_ref_meas * T_meas_surf
-        % 其中 T_world_ref 与 T_meas_surf 均为纯平移（坐标轴相互平行）
-        t_world = O_ref_in_world + t_rel + R_rel * O_surf_in_meas;
+        % 4. 测量子坐标系 -> 动平台表面坐标系（纯平移，坐标轴平行）
+        t_world = t_rel + R_rel * O_surf_in_meas;
         T_seq(:, :, k) = [R_rel, t_world; 0 0 0 1];
 
-        % 姿态不变，由相对旋转矩阵的 z 轴列恢复 phi/theta
-        % （与 pos2trans 约定一致）
+        % 由旋转矩阵的 z 轴列恢复 phi/theta（与 pos2trans 约定一致）
         theta = acosd(max(-1, min(1, R_rel(3, 3))));
         phi = atan2d(R_rel(2, 3), R_rel(1, 3));
 
@@ -79,13 +79,24 @@ function [pose_seq, T_seq] = calib_pts2pose_seq(data_dir)
     end
 end
 
+function [R, O] = build_world_frame(p1, p2, p3)
+% 世界坐标系：三点均值为原点，p2指向p3为x轴，
+% p1到x轴的垂线（由垂足指向p1）为y轴，z轴由右手定则确定
+    O = (p1 + p2 + p3) / 3;
+    x = (p3 - p2) / norm(p3 - p2);
+    foot = p2 + x * dot(p1 - p2, x);  % p1 在x轴上的垂足
+    y = (p1 - foot) / norm(p1 - foot);
+    z = cross(x, y);
+    R = [x y z];
+end
+
 function [R, O] = build_frame(p1, p2, p3)
-% 三点构建坐标系：原点为三点均值，x轴为 p3 指向 p2 的方向，
-% y轴为原点指向x轴的垂线方向，z轴由右手定则确定
+% 测量子坐标系：原点为三点均值，x轴为 p3 指向 p2 的方向，
+% y轴为 p1 到x轴的垂线方向（由p1指向垂足），z轴由右手定则确定
     O = (p1 + p2 + p3) / 3;
     x = (p2 - p3) / norm(p2 - p3);
-    foot = p3 + x * dot(O - p3, x);  % 原点在x轴上的垂足
-    y = (foot - O) / norm(foot - O);
+    foot = p3 + x * dot(p1 - p3, x);  % p1 在x轴上的垂足
+    y = (foot - p1) / norm(foot - p1);
     z = cross(x, y);
     R = [x y z];
 end

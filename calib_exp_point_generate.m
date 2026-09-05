@@ -17,7 +17,7 @@ if flag == 1
     step_size = 50;
     x_seq = -200 : step_size : 200;
     y_seq = -200 : step_size : 200;
-    z_seq = -40 : 80 : 40;  % -40 -- 40
+    z_seq = 0 : 40 : 40;  % -40 -- 40
     x0 = 0;
     y0 = 0;
     z0 = -972.5;
@@ -58,11 +58,13 @@ fprintf('point num = %d \n', length(points(1,:)))
 % 球面空间：theta = 0 取一个姿态；theta = 5°, 10° 时 phi 分别取 -120°, 0°, 120°
 % 角度单位：deg
 if flag == 1
-    pose_seq = [   0  0;
-                -120  5;
-                 120  5;
-                -120 10;
-                 120 10];  % [phi theta]
+    pose_seq = [75 10;
+                 0 10;
+               -75 10;
+                75  5;
+                 0  5;
+               -75  5;
+                  0  0];  % [phi theta]
 elseif flag == 2
     pose_seq = [   0  0;
                 -120  5;
