@@ -74,11 +74,11 @@ for k = 1 : 38
         elseif off == 4
             kin_p.l0(i) = kin_p.l0(i) + h;
         elseif i == 1
-            % 支链 1 参数块 [Δb1; ΔL1; Δa1x; Δd; Δa1z]（Δa1y 由 Δd 替代）
+            % 支链 1 参数块 [Δb1; ΔL1; Δd; Δa1y; Δa1z]（当前坐标系中 Δa1x 由 Δd 替代）
             if off == 5
-                kin_p.P_m(1, 1) = kin_p.P_m(1, 1) + h;
-            elseif off == 6
                 kin_p.d = kin_p.d + h;
+            elseif off == 6
+                kin_p.P_m(2, 1) = kin_p.P_m(2, 1) + h;
             else
                 kin_p.P_m(3, 1) = kin_p.P_m(3, 1) + h;
             end

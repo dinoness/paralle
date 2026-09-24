@@ -84,7 +84,7 @@ The calibration scripts (`calibration3.m`, `calibration4.m`, `calibration5.m`) f
 |---|---|
 | `calibration4.m` | LM-based kinematic calibration (primary, most current) |
 | `calibration5.m` | Regularized TLS calibration (alternative to LM, Chapter 4) |
-| `calibration6_c13_exp.m` | c13-method calibration on experimental data: dimensionless EMM (J3, 3 target feature points + tool errors, 38 params, limb-1 block [b1, L1, a1x, d, a1z] with non-ideal constraint offset d replacing a1y) + dual-quaternion FKS + iterative LS with truncated SVD |
+| `calibration6_c13_exp.m` | c13-method calibration on experimental data: dimensionless EMM (J3, 3 target feature points + tool errors, 38 params, limb-1 block [b1, L1, d, a1y, a1z] with non-ideal constraint offset d replacing a1x in the current frame) + dual-quaternion FKS + iterative LS with truncated SVD |
 | `calibration3.m` | Earlier POE calibration experiment (deprecated) |
 | `workspace_discrete_v3.m` | Workspace search with OTI/LCI computation, cylinder space analysis |
 | `Joint_angle_search.m` | Joint angle limit search across the workspace |

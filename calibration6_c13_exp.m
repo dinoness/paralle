@@ -3,8 +3,9 @@
 % 标定方案：J3 无量纲误差映射矩阵（式(52)~(55)）——3 个靶球特征点的位置
 %           误差等效表达末端全位姿误差，并引入辅助工具误差 c，共 38 个
 %           误差参数（35 个结构参数 + 3 个工具参数，全部长度量纲）。
-%           结构参数含支链 1 非理想约束偏置 d（文献 §2.2/§3.1：d 与 a1y
-%           耦合，支链 1 参数块为 [b1, L1, a1x, d, a1z]）
+%           结构参数含支链 1 非理想约束偏置 d：文献坐标系中 d 沿 e2、替代
+%           Δa1y；当前坐标系 x=文献y、y=−文献x、z=文献z，故当前 d 沿 e1、
+%           替代 Δa1x，支链 1 参数块为 [b1, L1, d, a1y, a1z]
 % 正解方案：对偶四元数 Newton 迭代（文献 §2.2~§2.3 非理想约束模型），
 %           见 lib_calib/dq_fks_spr4ups.m
 % 辨识流程：文献 §4.1 迭代辨识方案 Step 2~6
@@ -121,15 +122,16 @@ X3 = zeros(9*seq_len, 1);    % 堆叠残差向量
 err_list = zeros(loop_max+1, 1);
 
 % 误差参数名称（38 维，诊断不可辨识方向用）：
-% 支链 1 [Δb1x Δb1y Δb1z ΔL1 Δa1x Δd Δa1z]（Δa1y 由 Δd 替代，文献 §3.1），
-% 支链 2~5 [Δb_ix Δb_iy Δb_iz ΔL_i Δa_ix Δa_iy Δa_iz]，末尾 [Δc1 Δc2 Δc3]
+% 支链 1 [Δb1x Δb1y Δb1z ΔL1 Δd Δa1y Δa1z]（当前坐标系中 d 沿 e1 方向，
+% 替代 Δa1x），支链 2~5 [Δb_ix Δb_iy Δb_iz ΔL_i Δa_ix Δa_iy Δa_iz]，
+% 末尾 [Δc1 Δc2 Δc3]
 param_names = cell(38, 1);
 for i = 1 : 5
     param_names(7*(i-1) + (1:7)) = cellstr([ ...
         "b_"+i+"x"; "b_"+i+"y"; "b_"+i+"z"; "L_"+i; ...
         "a_"+i+"x"; "a_"+i+"y"; "a_"+i+"z"]);
 end
-param_names(5:7) = {'a_1x', 'd', 'a_1z'};
+param_names(5:7) = {'d', 'a_1y', 'a_1z'};
 param_names(36:38) = {'c_1', 'c_2', 'c_3'};
 
 calib_loop = 0;
@@ -208,11 +210,11 @@ while true
     kin_prev = kin;
     tool_prev = tool;
     rms_prev = rms_cur;
-    % 支链 1 参数块 [Δb1(3); ΔL1; Δa1x; Δd; Δa1z]（Δa1y 由 Δd 替代）
+    % 支链 1 参数块 [Δb1(3); ΔL1; Δd; Δa1y; Δa1z]（当前坐标系中 Δa1x 由 Δd 替代）
     kin.B(:, 1)   = kin.B(:, 1)   + eps_ident(1:3);
     kin.l0(1)     = kin.l0(1)     + eps_ident(4);
-    kin.P_m(1, 1) = kin.P_m(1, 1) + eps_ident(5);
-    kin.d         = kin.d         + eps_ident(6);
+    kin.d         = kin.d         + eps_ident(5);
+    kin.P_m(2, 1) = kin.P_m(2, 1) + eps_ident(6);
     kin.P_m(3, 1) = kin.P_m(3, 1) + eps_ident(7);
     for i = 2 : 5
         cidx = 7*(i-1) + (1:7);             % 支链 i 参数块 [Δb; ΔL; Δa]
