@@ -28,7 +28,7 @@ basic_paras = basic_read('parameters.xlsx', 'column', 'B', 'unit', 'm');
 |---|---|
 | `lib/` | Core kinematics: POE parameterization, forward/inverse kinematics, body/space Jacobians, calibration matrices |
 | `lib_math/` | Lie group operations: `exp_se3`/`log_se3`, `exp_so3`/`log_so3`, Paden-Kahan subproblems, screw reciprocity/power/efficiency |
-| `lib_calib/` | Calibration pipeline: measurement sequence generation (`calib_seq_generate`), TLS solver (`solve_tls`), 3-point transform (`three_pts2trans`) |
+| `lib_calib/` | Calibration pipeline: measurement sequence generation (`calib_seq_generate`), TLS solver (`solve_tls`), 3-point transform (`three_pts2trans`), measurement data assembly (`calib_pts2pose_seq`), c13-method calibration: dual-quaternion FKS with non-ideal constraint (`dq_fks_spr4ups`, `trans2dq`), non-ideal-constraint IKS (`iks_nonideal`), conventional/dimensionless EMMs (`build_emm_j1_spr4ups`, `build_emm_j3`) |
 | `lib_opt_struct/` | Structural parameter optimization: `compute_ltigci` (OTI metric), `evaluate_spr4ups_objective` |
 | `lib_para/` | `basic_read` — reads nominal geometric parameters from Excel |
 
@@ -84,6 +84,7 @@ The calibration scripts (`calibration3.m`, `calibration4.m`, `calibration5.m`) f
 |---|---|
 | `calibration4.m` | LM-based kinematic calibration (primary, most current) |
 | `calibration5.m` | Regularized TLS calibration (alternative to LM, Chapter 4) |
+| `calibration6_c13_exp.m` | c13-method calibration on experimental data: dimensionless EMM (J3, 3 target feature points + tool errors, 38 params, limb-1 block [b1, L1, a1x, d, a1z] with non-ideal constraint offset d replacing a1y) + dual-quaternion FKS + iterative LS with truncated SVD |
 | `calibration3.m` | Earlier POE calibration experiment (deprecated) |
 | `workspace_discrete_v3.m` | Workspace search with OTI/LCI computation, cylinder space analysis |
 | `Joint_angle_search.m` | Joint angle limit search across the workspace |

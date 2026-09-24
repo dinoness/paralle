@@ -1,4 +1,4 @@
-function [pose_seq, T_seq] = calib_pts2pose_seq(data_dir, base_file)
+function [pose_seq, T_seq, pts_world_seq] = calib_pts2pose_seq(data_dir, base_file)
 %CALIB_PTS2POSE_SEQ 处理标定测量数据，生成动平台表面坐标系位姿序列
 %   输入：
 %     data_dir  — 数据目录，包含 t1.txt / t2.txt / t3.txt 三个文件，
@@ -7,12 +7,16 @@ function [pose_seq, T_seq] = calib_pts2pose_seq(data_dir, base_file)
 %                 三点平均值为原点，p2指向p3的方向为x轴，
 %                 p1到x轴的垂线（由垂足指向p1）为y轴，z轴由右手定则确定
 %   输出：
-%     pose_seq — 5×n 位姿序列，每列 [x; y; z; phi; theta]，
-%                为动平台表面坐标系在世界坐标系下的位姿，
-%                长度单位 mm，角度单位 deg
-%     T_seq    — 4×4×n 齐次变换矩阵序列，由测量点构建的坐标系直接
-%                生成，为动平台表面坐标系在世界坐标系下的表示，
-%                平移单位 mm
+%     pose_seq      — 5×n 位姿序列，每列 [x; y; z; phi; theta]，
+%                     为动平台表面坐标系在世界坐标系下的位姿，
+%                     长度单位 mm，角度单位 deg
+%     T_seq         — 4×4×n 齐次变换矩阵序列，由测量点构建的坐标系直接
+%                     生成，为动平台表面坐标系在世界坐标系下的表示，
+%                     平移单位 mm
+%     pts_world_seq — (可选) 3×3×n 原始靶球点坐标序列，每页 [q1 q2 q3]
+%                     为世界坐标系下的 t1/t2/t3 实测点（含首末行去除与
+%                     编号对齐，与 T_seq 同序），单位 mm。供基于特征点
+%                     位置误差的标定方法（如 c13 无量纲 EMM）使用
 %
 %   处理流程：
 %     1. 读取 t1/t2/t3 测量文件，去除首行与末行（参考点复测），
@@ -51,10 +55,11 @@ function [pose_seq, T_seq] = calib_pts2pose_seq(data_dir, base_file)
     [R_w, O_w] = build_world_frame(base_pts(:,1), base_pts(:,2), base_pts(:,3));
 
     % 3. 相同编号的测量点构建测量子坐标系，转换到世界坐标系下
-    common_ids = intersect(intersect(ids1, ids2), ids3);
+    common_ids = intersect(intersect(ids1, ids2), ids3);  % 取编号的交集
     n = numel(common_ids);
     pose_seq = zeros(5, n);
     T_seq = zeros(4, 4, n);
+    pts_world_seq = zeros(3, 3, n);
     for k = 1 : n
         id = common_ids(k);
         q1 = pts1(:, ids1 == id);
@@ -70,6 +75,9 @@ function [pose_seq, T_seq] = calib_pts2pose_seq(data_dir, base_file)
         % 4. 测量子坐标系 -> 动平台表面坐标系（纯平移，坐标轴平行）
         t_world = t_rel + R_rel * O_surf_in_meas;
         T_seq(:, :, k) = [R_rel, t_world; 0 0 0 1];
+
+        % 原始靶球点转换到世界坐标系
+        pts_world_seq(:, :, k) = R_w.' * ([q1 q2 q3] - O_w);
 
         % 由旋转矩阵的 z 轴列恢复 phi/theta（与 pos2trans 约定一致）
         theta = acosd(max(-1, min(1, R_rel(3, 3))));
