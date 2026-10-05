@@ -71,9 +71,11 @@ Pos_ref_seq(1:3, :) = Pos_ref_seq(1:3, :) * unit_para;     % mm -> m
 Pos_ref_seq(4:5, :) = deg2rad(Pos_ref_seq(4:5, :));        % deg -> rad
 
 % 测量数据：动平台位姿序列 + 世界系下的原始靶球点（J3 残差用后者）
-[~, T_measure_seq, pts_meas_seq] = calib_pts2pose_seq('calib_p');
+% T_ref_seq 为 t1~t3 首末行零位复测点构建的位姿（末尾零位对比用）
+[~, T_measure_seq, pts_meas_seq, T_ref_seq] = calib_pts2pose_seq('calib_p');
 T_measure_seq(1:3, 4, :) = T_measure_seq(1:3, 4, :) * unit_para;  % mm -> m
 pts_meas_seq = pts_meas_seq * unit_para;                          % mm -> m
+T_ref_seq(1:3, 4, :) = T_ref_seq(1:3, 4, :) * unit_para;          % mm -> m
 % 靶球与文献特征点对应关系：c_1 = t2, c_2 = t3, c_3 = t1。
 % pts_meas_seq 原始列序为 [t1 t2 t3]，重排为文献序号 [c_1 c_2 c_3]，
 % 此后残差堆叠、feature_points_calc、build_emm_j3 均按 c 序号一致处理
@@ -294,6 +296,9 @@ fprintf(['零位位姿（标定后）: x=%.4f  y=%.4f  z=%.4f mm,  ' ...
 % 且控制器的正逆解需采用相同的非理想约束模型，d 才有效）
 calib_csv = 'calibrated_params_c13_exp.csv';
 fid = fopen(calib_csv, 'w');
+if fid < 0
+    warning('无法写入 %s（文件可能被其他程序占用），本次跳过 CSV 导出。', calib_csv);
+else
 fprintf(fid, '# SPR-4UPS calibrated kinematic parameters (c13 dimensionless EMM, J3)\n');
 fprintf(fid, '# Units: mm (length), deg (angle)\n');
 fprintf(fid, '# Columns: param_name, value[, value...]\n');
@@ -316,6 +321,33 @@ fprintf(fid, 'zero_pose,%.12f,%.12f,%.12f,%.12f,%.12f\n', ...
     pos_zero(1), pos_zero(2), pos_zero(3), pos_zero(4), pos_zero(5));
 fclose(fid);
 fprintf('标定参数已导出至 %s\n', calib_csv);
+end
+
+%% 零位实测位姿（t1~t3 首末行复测点）与标定后零位正解对比
+% 首末行为零位参考点的两次复测，T_ref_seq 由三点构建（世界系，与标定中
+% T_measure_seq 同一约定，即视测量世界系与基座系一致）；T_zero 为标定后
+% 参数 q=0 的正解零位位姿
+fprintf('零位对比（首末行实测复测点 vs 标定后正解零位）——\n');
+fprintf('  正解零位: [%.4f %.4f %.4f] mm, phi=%.4f° theta=%.4f°\n', pos_zero);
+for k = 1 : 2
+    T_ref = T_ref_seq(:, :, k);
+    dt = (T_ref(1:3, 4) - T_zero(1:3, 4)) / unit_para;    % mm
+    dz = acosd(max(-1, min(1, dot(T_ref(1:3, 3), T_zero(1:3, 3)))));  % 主轴向夹角
+    R_err = T_ref(1:3, 1:3).' * T_zero(1:3, 1:3);
+    dR = rad2deg(acos(max(-1, min(1, (trace(R_err) - 1) / 2))));      % 全姿态误差
+    phi_ref = atan2d(T_ref(2, 3), T_ref(1, 3));
+    theta_ref = acosd(max(-1, min(1, T_ref(3, 3))));
+    if k == 1, tag = '首行'; else, tag = '末行'; end
+    fprintf(['  %s: 实测 [%.4f %.4f %.4f] mm, phi=%.4f° theta=%.4f° | ' ...
+        'Δpos = %.4f mm ([%+.4f %+.4f %+.4f]), Δ主轴向 = %.4f°, Δ全姿态 = %.4f°\n'], ...
+        tag, T_ref(1:3, 4)/unit_para, phi_ref, theta_ref, ...
+        norm(dt), dt, dz, dR);
+end
+% 首末行互差（零位复测重复性）
+dt_rep = (T_ref_seq(1:3, 4, 2) - T_ref_seq(1:3, 4, 1)) / unit_para;
+dz_rep = acosd(max(-1, min(1, dot(T_ref_seq(1:3, 3, 1), T_ref_seq(1:3, 3, 2)))));
+fprintf('  首末行互差（重复性）: Δpos = %.4f mm, Δ主轴向 = %.4f°\n', ...
+    norm(dt_rep), dz_rep);
 
 fprintf('>>>= done (%s) =<<<\n', string(datetime('now', 'Format', 'HH:mm:ss')));
 

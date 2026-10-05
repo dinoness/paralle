@@ -1,4 +1,4 @@
-function [pose_seq, T_seq, pts_world_seq] = calib_pts2pose_seq(data_dir, base_file)
+function [pose_seq, T_seq, pts_world_seq, T_ref_seq] = calib_pts2pose_seq(data_dir, base_file)
 %CALIB_PTS2POSE_SEQ 处理标定测量数据，生成动平台表面坐标系位姿序列
 %   输入：
 %     data_dir  — 数据目录，包含 t1.txt / t2.txt / t3.txt 三个文件，
@@ -17,6 +17,9 @@ function [pose_seq, T_seq, pts_world_seq] = calib_pts2pose_seq(data_dir, base_fi
 %                     为世界坐标系下的 t1/t2/t3 实测点（含首末行去除与
 %                     编号对齐，与 T_seq 同序），单位 mm。供基于特征点
 %                     位置误差的标定方法（如 c13 无量纲 EMM）使用
+%     T_ref_seq     — (可选) 4×4×2 零位参考点复测位姿：由 t1/t2/t3 的
+%                     首行（第 1 页）与末行（第 2 页）构建，与 T_seq 同一
+%                     坐标系约定，平移单位 mm
 %
 %   处理流程：
 %     1. 读取 t1/t2/t3 测量文件，去除首行与末行（参考点复测），
@@ -43,6 +46,16 @@ function [pose_seq, T_seq, pts_world_seq] = calib_pts2pose_seq(data_dir, base_fi
     [ids2, pts2] = read_points_file(fullfile(data_dir, 't2.txt'));
     [ids3, pts3] = read_points_file(fullfile(data_dir, 't3.txt'));
 
+    % 首末行为零位参考点复测：先取出（编号需在三个文件间一致）
+    ref_idx = [1, numel(ids1)];
+    if ids1(1) ~= ids2(1) || ids1(1) ~= ids3(1) || ...
+            ids1(end) ~= ids2(end) || ids1(end) ~= ids3(end)
+        error('t1/t2/t3 首末行（零位复测点）编号不一致');
+    end
+    ref_pts1 = pts1(:, ref_idx);
+    ref_pts2 = pts2(:, ref_idx);
+    ref_pts3 = pts3(:, ref_idx);
+
     ids1 = ids1(2:end-1);  pts1 = pts1(:, 2:end-1);
     ids2 = ids2(2:end-1);  pts2 = pts2(:, 2:end-1);
     ids3 = ids3(2:end-1);  pts3 = pts3(:, 2:end-1);
@@ -53,6 +66,15 @@ function [pose_seq, T_seq, pts_world_seq] = calib_pts2pose_seq(data_dir, base_fi
         error('%s 应包含 3 个点，实际读取到 %d 个', base_file, size(base_pts, 2));
     end
     [R_w, O_w] = build_world_frame(base_pts(:,1), base_pts(:,2), base_pts(:,3));
+
+    % 2b. 零位参考点复测位姿（与主循环同一坐标系约定）
+    T_ref_seq = zeros(4, 4, 2);
+    for k = 1 : 2
+        [R_sub, O_sub] = build_frame(ref_pts1(:, k), ref_pts2(:, k), ref_pts3(:, k));
+        R_rel = R_w.' * R_sub;
+        t_world = R_w.' * (O_sub - O_w) + R_rel * O_surf_in_meas;
+        T_ref_seq(:, :, k) = [R_rel, t_world; 0 0 0 1];
+    end
 
     % 3. 相同编号的测量点构建测量子坐标系，转换到世界坐标系下
     common_ids = intersect(intersect(ids1, ids2), ids3);  % 取编号的交集
